@@ -26,7 +26,7 @@ ddi_monthly <- read_ipums_ddi("raw_data/cps_00018.xml")
 
 # Read in IPUMS CPS data
 data_monthly <- read_ipums_micro(ddi_monthly) %>%
-  filter(YEAR >= 1983) %>%
+  filter(YEAR >= 1980) %>%
   filter(YEAR < 2024) %>%
   filter(MISH %in% c(4, 8)) # Select only months eligible for ORG interview
 
@@ -35,7 +35,7 @@ cpi99 <- read_csv("raw_data/cpi99.csv")
 
 # Filtering and removing unnecessary raw data for space constraints
 analytic_sample <- data_monthly %>%
-  filter(AGE >= 25 & AGE <= 55) %>%
+  filter(AGE >= 21 & AGE <= 55) %>%
   # Excluding Agriculture and Military
   filter(IND1990 > 032) %>%
   filter(IND1990 < 940) %>%
@@ -51,9 +51,9 @@ analytic_sample_recoded <- analytic_sample %>%
          BIRTHYEAR = YEAR-AGE, 
          FEMALE = ifelse(SEX == 2, "Women", "Men"),
          EDUC = ifelse(EDUC == 999, NA, EDUC),
-         EDUC = case_when(EDUC  <= 73 ~ "High School or Less", 
-                          EDUC < 110 ~ "Some College", 
-                          EDUC >= 110 ~ "BA+"), 
+         EDUC = case_when(EDUC  <= 73 ~ "hs.or.less", 
+                          EDUC < 110 ~ "some.college", 
+                          EDUC >= 110 ~ "ba.plus"), 
          HOURWAGE = na_codes(HOURWAGE, 999.99),
          EARNWEEK = na_codes(EARNWEEK, 9999.99), 
          UHRSWORKORG = na_codes(UHRSWORKORG, c(998, 999)), 
@@ -89,6 +89,8 @@ analytic_sample_recoded_topcode <- analytic_sample_recoded %>%
   ) %>% 
   ungroup()
 
+rm(analytic_sample_recoded)
+
 # Creating a figure showing percent eligible for ORG by age and year 
 fig_org_eligibility_age_year <- analytic_sample_recoded_topcode %>% 
   group_by(BIRTHYEAR, FEMALE, YEAR, AGE) %>%
@@ -115,7 +117,6 @@ ggsave("figures/org_eligibility.pdf", fig_org_eligibility_age_year,
 
 analytic_sample_org <- analytic_sample_recoded_topcode %>%
   select(-c(log_mean, log_sd, log_topcode, t1, t2, t3, mean_above_topcode)) %>%
-  filter(ELIGORG == 1) %>%
   mutate(HOURWAGE_RAW = HOURWAGE,
          EARNWEEK_RAW = EARNWEEK,
          HOURWAGE = HOURWAGE * cpi1999 * 1.553,
@@ -124,8 +125,25 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
          EARNHRLY = case_when(PAIDHOUR == 2 ~ HOURWAGE, 
                               UHRSWORK1 == 0 ~ NA,
                               PAIDHOUR != 2 ~ EARNWEEK_ADJ/UHRSWORK1),
-         EARNWT = EARNWT/12) 
+         EARNWT = EARNWT/12,
+         RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "latino",
+                             RACE == 200 ~ "black",
+                             RACE == 100 ~ "white",
+                             TRUE ~ "other"), 
+         MARRIED = case_when(MARST %in% c(1,2) ~ "married", 
+                             MARST == 6 ~ "never.married", 
+                             TRUE ~ "prev.married"), 
+         FBORN = factor(ifelse(NATIVITY == 5, 1, 0)),
+         YNGCH.REC = case_when(YNGCH == 99 ~ "none", 
+                               YNGCH <= 5 ~ "under5", 
+                               TRUE ~ "olderthan5"), 
+         NCHILD.REC = case_when(NCHILD == 0 ~ "none", 
+                                NCHILD == 1 ~ "one", 
+                                NCHILD == 2 ~ "two", 
+                                TRUE ~ "threeplus"))
 
-rm(analytic_sample_recoded)
-
-write_rds(analytic_sample_org, "clean_data/analytic_sample_org.rds")
+analytic_sample_org_elig <- analytic_sample_org %>%
+  filter(ELIGORG == 1)
+         
+write_rds(analytic_sample_org, "clean_data/analytic_sample_org_all.rds")
+write_rds(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.rds")
