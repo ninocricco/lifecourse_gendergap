@@ -3,6 +3,7 @@ library(haven)
 library(janitor)
 library(broom)
 library(Hmisc)
+library(weights)
 
 # Reading in full ORG data and creating year groups for pooled estimation
 sample_all <- readRDS("clean_data/analytic_sample_org_all.rds") %>%
@@ -52,6 +53,44 @@ org_w_selection <- read_rds("clean_data/analytic_sample_org_elig.rds") %>%
   mutate(ELIGORG_PRED_WEIGHT = WEIGHT/ELIGORG_PRED, 
          ELIGORG_PRED_REFCOHORT_WEIGHT = WEIGHT/ELIGORG_PRED_REFCOHORT)
 
+write_rds(org_w_selection, "clean_data/analytic_sample_org_elig_weights.rds")
+
+org_w_selection <- read_rds("clean_data/analytic_sample_org_elig_weights.rds")
+
+# Creating means with regular and different sample weights
+means.age.bc_yr_sel_ed <- org_w_selection %>%
+  # First create year birth cohort age-specific mean wages and n's
+  group_by(BIRTHYEAR, YEAR, AGE, FEMALE) %>%
+  summarise(EDUC_PCT = wpct(EDUC, weight = WEIGHT), 
+            EDUC_PCT_RW = wpct(EDUC, weight = ELIGORG_PRED_WEIGHT), 
+            EDUC_PCT_RW_REF = wpct(EDUC, weight = ELIGORG_PRED_REFCOHORT_WEIGHT), 
+            EDUC = factor(c("ba.plus", "hs.or.less", "some.college")))
+
+means.age.bc_yr_sel_ed  %>% filter(AGE == 25) %>% ungroup() %>% 
+  select(YEAR, FEMALE, starts_with("EDUC")) %>% 
+  gather(key, value, -c(YEAR, FEMALE, EDUC)) %>% 
+  mutate(EDUC = factor(EDUC, levels = c("ba.plus", "some.college", "hs.or.less"))) %>%
+  ggplot(aes(x = YEAR, y = value, color = EDUC, linetype = key)) +
+  geom_line() + theme_bw() + facet_grid(rows = vars(FEMALE), cols = vars(EDUC)) +
+  theme(legend.position = "bottom")
+
+# Creating means with regular and different sample weights
+means.age.bc_yr_sel_race <- org_w_selection %>%
+  # First create year birth cohort age-specific mean wages and n's
+  group_by(YEAR, FEMALE) %>%
+  summarise(RACEETH_PCT = wpct(RACEETH, weight = WEIGHT), 
+            RACEETH_PCT_RW = wpct(RACEETH, weight = ELIGORG_PRED_WEIGHT), 
+            RACEETH_PCT_RW_REF = wpct(RACEETH, weight = ELIGORG_PRED_REFCOHORT_WEIGHT), 
+            RACEETH = factor(c("black", "latino", "other", "white")))
+
+means.age.bc_yr_sel_race  %>% filter(RACEETH == "white") %>% ungroup() %>% 
+  select(YEAR, FEMALE, starts_with("RACEETH")) %>% 
+  gather(key, value, -c(YEAR, FEMALE, RACEETH)) %>% 
+  #mutate(RACEETH = factor(RACEETH, levels = c("ba.plus", "some.college", "hs.or.less"))) %>%
+  ggplot(aes(x = YEAR, y = value, color = RACEETH, linetype = key)) +
+  geom_line() + theme_bw() + facet_grid(rows = vars(FEMALE), cols = vars(RACEETH)) +
+  theme(legend.position = "bottom")
+
 # Creating means with regular and different sample weights
 means.age.bc_yr_sel <- org_w_selection %>%
   # First create year birth cohort age-specific mean wages and n's
@@ -63,6 +102,14 @@ means.age.bc_yr_sel <- org_w_selection %>%
             MEAN.OUTCOME = wtd.mean(OUTCOME, 
                                     weight = WEIGHT),
             n = n())
+
+means.age.bc_yr_sel %>% filter(AGE %in% c(25, 35, 45)) %>%
+  ungroup() %>% select(YEAR, AGE, FEMALE, starts_with("MEAN")) %>%
+  gather(key, value, -c(YEAR, AGE, FEMALE)) %>%
+  ggplot(aes(x = YEAR, y = value, linetype = key)) +
+  geom_line() +
+  theme_bw() +
+  facet_grid(cols = vars(FEMALE), rows = vars(AGE), scales = "free")
 
 means.age.bc_yr_sel <- means.age.bc_yr_sel %>%
   # Computes and merges column calculating total # of women in sample by year
@@ -99,7 +146,7 @@ means.age.bc_yr_sel %>%
   geom_line() +
   theme_bw() +
   labs(title = "Mean Wages by Age, Gender, and Cohort, CPS ORG, with Selection Weights") +
-  facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE)) +
+  facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE), scales = "free") +
   theme(legend.position = "bottom", 
         title = element_text(hjust = .5))
 
@@ -118,6 +165,39 @@ org_w_selection %>%
   theme(legend.position = "bottom", 
         title = element_text(hjust = .5)) +
   facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE))
+
+# Diagnostic plots: Predicted ORG Eligibility by age, gender, and cohort
+org_w_selection %>%
+  # First create year birth cohort age-specific mean wages and n's
+  group_by(BIRTHYEAR, YEAR, AGE, FEMALE, EDUC) %>%
+  summarise(PREDPROB_COHORT = mean(ELIGORG_PRED),
+            PREDPROB_REFCOHORRT = mean(ELIGORG_PRED_REFCOHORT)) %>%
+  gather(key, value, -c(BIRTHYEAR, YEAR, AGE, EDUC, FEMALE)) %>%
+  filter(BIRTHYEAR %in% c(1957, 1967, 1977, 1987)) %>%
+  ggplot(aes(y = value, x = AGE, linetype = key, color = EDUC)) +
+  geom_line() +
+  theme_bw() +
+  labs(title = "Predicted ORG Eligibility by Age, Gender, Education, and Cohort, CPS") +
+  theme(legend.position = "bottom", 
+        title = element_text(hjust = .5)) +
+  facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE))
+
+# Diagnostic plots: Predicted ORG Eligibility by age, gender, and cohort
+org_w_selection %>%
+  # First create year birth cohort age-specific mean wages and n's
+  group_by(BIRTHYEAR, YEAR, AGE, FEMALE, RACEETH) %>%
+  summarise(PREDPROB_COHORT = mean(ELIGORG_PRED),
+            PREDPROB_REFCOHORRT = mean(ELIGORG_PRED_REFCOHORT)) %>%
+  gather(key, value, -c(BIRTHYEAR, YEAR, AGE, RACEETH, FEMALE)) %>%
+  filter(BIRTHYEAR %in% c(1957, 1967, 1977, 1987)) %>%
+  ggplot(aes(y = value, x = AGE, linetype = key, color = RACEETH)) +
+  geom_line() +
+  theme_bw() +
+  labs(title = "Predicted ORG Eligibility by Age, Gender, Race, and Cohort, CPS") +
+  theme(legend.position = "bottom", 
+        title = element_text(hjust = .5)) +
+  facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE))
+
 
 # Diagnostic plots: selection model coefficients
 selection_models %>%

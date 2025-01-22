@@ -67,8 +67,16 @@ analytic.sample.asec <- analytic.sample %>%
          # Creating predicted hourly wage variable
          UHRSWORKLY = na_if(UHRSWORKLY, 999),
          PRED.ANNHRSWRK = UHRSWORKLY * WKSWORK1,
-         PRED.HRLYWAGE.TOPCODE = INCWAGE.TOPCODE/PRED.ANNHRSWRK) 
+         PRED.HRLYWAGE.TOPCODE = INCWAGE.TOPCODE/PRED.ANNHRSWRK, 
+         BIRTHYEAR_DECADES = case_when(BIRTHYEAR %in% c(1913:1919) ~ "1913-1919",
+                                       BIRTHYEAR %in% c(1920:1929) ~ "1920s",
+                                       BIRTHYEAR %in% c(1925:1939) ~ "1930s",
+                                       BIRTHYEAR %in% c(1940:1949) ~ "1940s",
+                                       BIRTHYEAR %in% c(1950:1959) ~ "1950s",
+                                       BIRTHYEAR %in% c(1960:1969) ~ "1960s",
+                                       BIRTHYEAR %in% c(1970:1979) ~ "1970s",
+                                       BIRTHYEAR %in% c(1980:1995) ~ "1980-1995"),
+         AGE_GROUP = AGE - (AGE %% 3) + 1, 
+         BIRTHYEAR_GROUP = YEAR - AGE_GROUP) 
 
 write_rds(analytic.sample.asec, "clean_data/analytic_sample_asec.rds")
-
-
