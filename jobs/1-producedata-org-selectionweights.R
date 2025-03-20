@@ -131,10 +131,33 @@ means.age.bc_yr_sel %>%
   ggplot(aes(y = value, x = AGE, linetype = key)) +
   geom_line() +
   theme_bw() +
-  labs(title = "Mean Wages by Age, Gender, and Cohort, CPS ORG, with Selection Weights") +
-  facet_grid(rows = vars(BIRTHYEAR), cols = vars(FEMALE)) +
-  theme(legend.position = "bottom", 
-        title = element_text(hjust = .5))
+  labs(x = "Age", y = "Ratio") +
+  theme(
+    # Text elements
+    plot.title = element_text(hjust = 0.5, size = base_size * 1.2, face = "bold", margin = margin(0, 0, 10, 0)),
+    plot.subtitle = element_text(hjust = 0.5, size = base_size * 0.9, margin = margin(0, 0, 10, 0)),
+    plot.caption = element_text(size = base_size * 0.7, face = "italic", margin = margin(10, 0, 0, 0)),
+    axis.title = element_text(size = base_size * 0.9, face = "bold"),
+    axis.text = element_text(size = base_size * 0.8),
+    legend.title = element_text(size = base_size * 0.9, face = "bold"),
+    legend.text = element_text(size = base_size * 0.8),
+    strip.text = element_text(size = base_size * 0.9, face = "bold"),
+    
+    # Plot elements
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.border = element_rect(color = "gray40", fill = NA),
+    legend.background = element_rect(fill = "white", color = NA),
+    legend.key = element_rect(fill = "white"),
+    strip.background = element_rect(fill = "gray95"),
+    legend.position = "none",
+    legend.justification = c(0, 1),
+    
+    # Overall aesthetics
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  facet_grid(FEMALE ~ BIRTHYEAR)
 
 
 # Diagnostic plots: Weighted mean wages by age for a selection of cohorts
