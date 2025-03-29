@@ -608,7 +608,7 @@ def main():
 <html lang="en">
 <head>
     <meta charset="UTF-8"/>
-    <title>All Figures in One Page (No Iframes)</title>
+    <title>Gender Pay Gap Age Period Cohort Visualization</title>
     <!-- Load Plotly once from CDN -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
