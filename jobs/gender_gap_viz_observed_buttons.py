@@ -215,7 +215,7 @@ def create_period_visualization(data, years, birthyears):
         # Make the figure bigger, with enough bottom margin for the buttons
         width=950,
         height=650,
-        margin=dict(l=90, r=70, t=40, b=220),
+        margin=dict(l=100, r=80, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
@@ -366,7 +366,7 @@ def create_cohort_visualization(data, years, birthyears):
         ),
         width=950,
         height=650,
-        margin=dict(l=90, r=70, t=40, b=220),
+        margin=dict(l=100, r=80, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
@@ -521,7 +521,7 @@ def create_age_visualization(data, birthyears):
         ),
         width=950,
         height=650,
-        margin=dict(l=90, r=70, t=40, b=220),
+        margin=dict(l=100, r=80, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
