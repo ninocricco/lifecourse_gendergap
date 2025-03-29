@@ -9,6 +9,7 @@ source("jobs/0-helperfunctions.R")
 source("jobs/2-figures-functions.R")
 
 org <- read_rds("clean_data/analytic_sample_org_elig_weights.rds") %>%
+  mutate(UHRSWORK1_PRED = as.numeric(zap_labels(UHRSWORK1_PRED))) %>%
   filter(UHRSWORK1_PRED > 0) %>%
   mutate(RACEETH = case_when(RACEETH == "black" ~ "Black",
                              RACEETH == "white" ~ "White",
