@@ -65,7 +65,7 @@ def create_colorscale_legend(min_birth_year, max_birth_year):
         color = mcolors.rgb2hex(plasma(color_val))
         annotations.append(
             dict(
-                x=1.05,
+                x=1.08,
                 y=color_val,
                 xref='paper',
                 yref='paper',
@@ -123,7 +123,6 @@ def create_period_visualization(data, years, birthyears):
             marker=dict(size=6, color='black'),
             name='Aggregate Trend',
             showlegend=False,
-            # Also give a hovertemplate
             hovertemplate='Year: %{x}<br>Gap: %{y:.1f}%'
         )
     )
@@ -163,7 +162,7 @@ def create_period_visualization(data, years, birthyears):
     shapes, annotations = create_colorscale_legend(min_by, max_by)
     annotations.append(
         dict(
-            x=1.05,
+            x=1.08,
             y=1.05,
             xref='paper',
             yref='paper',
@@ -192,10 +191,8 @@ def create_period_visualization(data, years, birthyears):
         type='rect',
         xref='paper',
         yref='paper',
-        x0=0,
-        y0=0,
-        x1=1,
-        y1=1,
+        x0=0, y0=0,
+        x1=1, y1=1,
         line=dict(color='black', width=1),
         fillcolor='rgba(0,0,0,0)'
     )
@@ -215,14 +212,14 @@ def create_period_visualization(data, years, birthyears):
             range=[-5, data['gender_gap'].max()*1.1],
             gridcolor='lightgray'
         ),
+        # Make the figure bigger, with enough bottom margin for the buttons
         width=950,
         height=650,
-        # Large bottom margin so the buttons at y=-1.3 aren't cut off
-        margin=dict(l=50, r=120, t=40, b=220),
+        margin=dict(l=90, r=70, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
-            x=1.02, y=1,
+            x=.9, y=1,
             xanchor='left',
             yanchor='top',
             borderwidth=0
@@ -236,7 +233,6 @@ def create_period_visualization(data, years, birthyears):
         visible_array = []
         for trace in fig.data:
             if trace.name == 'Aggregate Trend':
-                # Always show the aggregate trend
                 visible_array.append(True)
             else:
                 visible_array.append(trace.legendgroup == f'decade_{decade}')
@@ -262,8 +258,8 @@ def create_period_visualization(data, years, birthyears):
         buttons=buttons,
         direction='right',
         x=0.5, xanchor='center',
-        # Position the buttons well below the x-axis
-        y=-1.3, yanchor='top',
+        # Move the menu to about 25% below the chart area
+        y=-0.1, yanchor='top',
         pad={"r": 10, "t": 10},
         showactive=True
     )
@@ -273,8 +269,7 @@ def create_period_visualization(data, years, birthyears):
 
 def create_cohort_visualization(data, years, birthyears):
     """
-    Panel 2: Cohort. X=Year, Y=Gap, color-coded by birth year, but filter by
-    the actual decade of the calendar year. 
+    Panel 2: Cohort. X=Year, Y=Gap, color-coded by birth year, filtered by calendar-year decade.
     Hover: Year, Birth Cohort, Gap.
     """
     min_by, max_by = int(min(birthyears)), int(max(birthyears))
@@ -307,6 +302,7 @@ def create_cohort_visualization(data, years, birthyears):
                     x=subset['YEAR'],
                     y=subset['gender_gap'],
                     mode='lines+markers',
+                    opacity=0.7,
                     line=dict(color=color, width=1.5),
                     marker=dict(size=4, color=color),
                     name=str(by),
@@ -323,7 +319,7 @@ def create_cohort_visualization(data, years, birthyears):
     shapes, annotations = create_colorscale_legend(min_by, max_by)
     annotations.append(
         dict(
-            x=1.05,
+            x=1.08,
             y=1.05,
             xref='paper',
             yref='paper',
@@ -370,11 +366,11 @@ def create_cohort_visualization(data, years, birthyears):
         ),
         width=950,
         height=650,
-        margin=dict(l=50, r=120, t=40, b=220),
+        margin=dict(l=90, r=70, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
-            x=1.02, y=1,
+            x=.9, y=1,
             xanchor='left',
             yanchor='top',
             borderwidth=0
@@ -426,7 +422,7 @@ def create_cohort_visualization(data, years, birthyears):
         buttons=buttons,
         direction='right',
         x=0.5, xanchor='center',
-        y=-1.3, yanchor='top',
+        y=-0.1, yanchor='top',
         pad={"r": 10, "t": 10},
         showactive=True
     )
@@ -478,7 +474,7 @@ def create_age_visualization(data, birthyears):
     shapes, annotations = create_colorscale_legend(min_by, max_by)
     annotations.append(
         dict(
-            x=1.05,
+            x=1.08,
             y=1.05,
             xref='paper',
             yref='paper',
@@ -525,11 +521,11 @@ def create_age_visualization(data, birthyears):
         ),
         width=950,
         height=650,
-        margin=dict(l=50, r=120, t=40, b=220),
+        margin=dict(l=90, r=70, t=40, b=220),
         shapes=shapes,
         annotations=annotations,
         legend=dict(
-            x=1.02, y=1,
+            x=.9, y=1,
             xanchor='left',
             yanchor='top',
             borderwidth=0
@@ -565,7 +561,7 @@ def create_age_visualization(data, birthyears):
         buttons=buttons,
         direction='right',
         x=0.5, xanchor='center',
-        y=-1.3, yanchor='top',
+        y=-0.1, yanchor='top',
         pad={"r": 10, "t": 10},
         showactive=True
     )
@@ -608,8 +604,6 @@ def main():
     )
 
     # 4) Build one "all_in_one.html" page
-    #    We'll load Plotly once, embed the 3 figure divs, and hide/show them with custom buttons.
-    #    Double braces in the arrow function to avoid Python f-string confusion.
     html_output = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -622,15 +616,22 @@ def main():
         font-family: Arial, sans-serif;
         margin: 0; padding: 0;
       }}
-      h1, h2 {{
+      /* Make the main title & sub-title smaller */
+      h1 {{
         text-align: center;
-        margin: 10px 0;
+        font-size: 20px; /* smaller than default ~2em */
+        margin: 5px 0;
+      }}
+      h2 {{
+        text-align: center;
+        font-size: 14px;
+        margin: 5px 0;
       }}
       .caption {{
         text-align: center;
-        font-size: 12px;
+        font-size: 10px;
         color: #777;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
         font-style: italic;
       }}
       .view-selector {{
@@ -657,7 +658,7 @@ def main():
       /* each figure is in a .viz-container <div> */
       .viz-container {{
         display: none;  /* hidden by default */
-        width: 1000px;
+        width: 1100px;  /* slightly wider container */
         margin: 0 auto;
       }}
       .viz-container.active {{
@@ -669,7 +670,7 @@ def main():
 
   <h1>The Gender Pay Gap in the United States, 1982-2023</h1>
   <h2>An Interactive Visualization of Age, Period, and Cohort Trends</h2>
-  <p class="caption">Data from the Current Population Survey Outgoing Rotation Groups, 
+  <p class="caption">Data on hourly wages from the Current Population Survey Outgoing Rotation Groups, 
      non self−employed workers aged 25−55. Created by Nino Cricco.</p>
 
   <div class="view-selector">
