@@ -716,12 +716,12 @@ def main():
 </body>
 </html>"""
 
-    out_filename = "all_in_one.html"
+    out_filename = "gendergap_apc_interactive.html"
     with open(out_filename, "w", encoding="utf-8") as f:
         f.write(html_output)
 
     print(f"Created: {out_filename}")
-    print("Done! Open 'all_in_one.html' in your browser to see all three figures without iframes.")
+    print("Done! Open 'gendergap_apc_interactive.html' in your browser to see all three figures without iframes.")
 
 
 if __name__ == "__main__":
