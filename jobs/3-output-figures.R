@@ -24,24 +24,39 @@ asec <- read_rds("clean_data/analytic_sample_asec.rds") %>%
 # Main text figures
 plot1 <- create_plot1(
   gen_outcome_sumstats(org, use_birth_group = "BIRTHYEAR_DECADES"),
-  title = "", caption = "")
+  title = "", caption = "", with_bootstrap = T, conf_level = .95)
 
 plot2 <- create_plot2(
   gen_outcome_sumstats(org, use_birth_group = "BIRTHYEAR_DECADES"),
-  title = "", caption = "")
+  title = "", caption = "", with_bootstrap = T, conf_level = .95)
 
 plot3 <- create_plot3(gen_outcome_sumstats(org),
-                      title = "", caption = "")
+                      title = "", caption = "", with_bootstrap = T, conf_level = .95)
 
 plot4 <- create_plot4(gen_outcome_sumstats(org, use_age_group = T),
                       use_grayscale = F,
-                      title = "", caption = "")
+                      title = "", caption = "", with_bootstrap = T, conf_level = .95)
 
 plot5 <- create_plot5(gen_outcome_sumstats(org), use_grayscale = F,
-                      title = "", caption = "")
+                      title = "", caption = "", with_bootstrap = T, conf_level = .95)
 
 plot6 <- create_plot3(gen_outcome_sumstats(org), scenario_type = "all",
-                      title = "", caption = "")
+                      title = "", caption = "", with_bootstrap = T, conf_level = .95)
+
+plots_main <- list(plot1, plot2, plot3, plot4, plot5, plot6)
+
+for (i in seq_along(plots_main)) {
+  ggsave(
+    filename = file.path("figures/draft_paper/submission_main", paste0("plot_", i, ".pdf")),
+    plot     = plots_main[[i]],
+    device   = "pdf",
+    width    = 10,
+    height   = 6,
+    units    = "in"
+  )
+}
+
+
 
 # Appendix figures- main
 

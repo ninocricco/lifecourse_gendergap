@@ -6,10 +6,8 @@
 #------------------------------------------------------------------------------
 # Loading libraries
 library(tidyverse)
-library(janitor)
+library(haven)
 library(Hmisc)
-library(weights)
-library(boot)
 
 #------------------------------------------------------------------------------
 # SUMMARY STATISTICS FUNCTIONS
@@ -71,18 +69,20 @@ gen_outcome_sumstats <- function(data,
 #------------------------------------------------------------------------------
 
 prepare_plot1_data <- function(data, 
-                              decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980-1995")) {
+                              decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
   
   transformed_data <- data %>%
     select(AGE, BIRTHYEAR_DECADES, FEMALE, MEAN.OUTCOME) %>% 
     filter(complete.cases(BIRTHYEAR_DECADES)) %>%
-    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 45 ~ 1,
-                            BIRTHYEAR_DECADES == "1980-1995" & AGE > 35 ~ 1,
+    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 50 ~ 1,
+                            BIRTHYEAR_DECADES == "1980s" & AGE > 40 ~ 1,
+                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 30 ~ 1,
                             TRUE ~ 0)) %>%
     filter(drop == 0, AGE <= 55) %>%
     pivot_wider(names_from = FEMALE, values_from = MEAN.OUTCOME) %>% 
     mutate(ratio = Women/Men) %>%
-    mutate(label = case_when(AGE == 35 & BIRTHYEAR_DECADES == "1980-1995" ~ BIRTHYEAR_DECADES,
+    mutate(label = case_when(AGE == 25 & BIRTHYEAR_DECADES == "1990-1998" ~ BIRTHYEAR_DECADES,
+                             AGE == 35 & BIRTHYEAR_DECADES == "1980s" ~ BIRTHYEAR_DECADES,
                              AGE == 44 & BIRTHYEAR_DECADES == "1970s" ~ BIRTHYEAR_DECADES,
                              AGE == 47 & BIRTHYEAR_DECADES == "1960s" ~ BIRTHYEAR_DECADES,
                              AGE == 55 & BIRTHYEAR_DECADES == "1950s" ~ BIRTHYEAR_DECADES,
@@ -270,7 +270,9 @@ prepare_counterfactual_data <- function(data,
       left_join(., group_data %>%
                   group_by(YEAR, FEMALE) %>%
                   summarise(
-                    n_year = sum(n)), by = c("YEAR", "FEMALE")) %>%
+                    n_year = sum(n), 
+                    .groups = "drop"),
+                by = c("YEAR", "FEMALE")) %>%
       arrange(BIRTHYEAR, YEAR, AGE) %>%
       mutate(
         lf_cohortprop = n/n_year,

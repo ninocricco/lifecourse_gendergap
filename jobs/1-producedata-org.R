@@ -279,7 +279,9 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                                  BIRTHYEAR %in% c(1950:1959) ~ "1950s",
                                  BIRTHYEAR %in% c(1960:1969) ~ "1960s",
                                  BIRTHYEAR %in% c(1970:1979) ~ "1970s",
-                                 BIRTHYEAR %in% c(1980:1995) ~ "1980-1995"), 
+                                 BIRTHYEAR %in% c(1980:1989) ~ "1980s", 
+                                 BIRTHYEAR %in% c(1990:1998) ~ "1990-1998" 
+                                 ), 
          AGE_GROUP = AGE - (AGE %% 3) + 1, 
          BIRTHYEAR_GROUP = YEAR - AGE_GROUP)
 

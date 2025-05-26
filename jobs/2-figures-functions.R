@@ -11,8 +11,7 @@ library(gridExtra)
 library(grid)
 
 # Source data calculation functions
-source("jobs/data-functions.R")
-source("jobs/bootstrap_estimates.R")
+source("jobs/2-data-prep-functions.R")
 
 #------------------------------------------------------------------------------
 # COMMON THEME AND COLOR PALETTE FUNCTIONS
@@ -30,7 +29,8 @@ color_palettes <- list(
     "1950s" = "grey52",
     "1960s" = "grey38",
     "1970s" = "grey24",
-    "1980-1995" = "grey10"
+    "1980s" = "grey10",
+    "1990-1998" = "grey1"
   ),
   
   age_gray = c(
@@ -56,10 +56,11 @@ figs_cohort_colors <- function(use_grayscale = TRUE) {
     return(c(
       "1930s" = color_palettes$viridis[7],
       "1940s" = color_palettes$viridis[6],
-      "1950s" = color_palettes$viridis[2],
-      "1960s" = color_palettes$viridis[3],
-      "1970s" = color_palettes$viridis[4],
-      "1980-1995" = color_palettes$viridis[5]
+      "1950s" = color_palettes$viridis[5],
+      "1960s" = color_palettes$viridis[4],
+      "1970s" = color_palettes$viridis[3],
+      "1980s" = color_palettes$viridis[2],
+      "1990-1998" = color_palettes$viridis[1]
     ))
   }
 }
@@ -151,7 +152,7 @@ create_plot1 <- function(data,
                          caption = NULL,
                          base_size = 14, 
                          legend.position = "none",
-                         decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980-1995"),
+                         decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998"),
                          with_bootstrap = FALSE,
                          conf_level = 0.95) {
   
@@ -166,37 +167,51 @@ create_plot1 <- function(data,
   # Prepare data for plotting
   plot_data <- prepare_plot1_data(data, decades_to_include)
   
-  # Create base plot
-  p <- plot_data %>%
-    ggplot(aes(x = AGE, y = ratio, color = BIRTHYEAR_DECADES, label = label,
+  p_gender <- plot_data %>%
+    select(AGE, BIRTHYEAR_DECADES, Men, Women) %>%
+    gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
+    mutate(key = factor(key, levels = c("Men", "Women"))) %>%
+    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES, 
                linetype = "solid")) +
     geom_line(size = 1) +
-    geom_label_repel(box.padding = 1.5, 
-                     point.padding = 0.3,
-                     show.legend = FALSE, 
-                     fill = "white",
-                     size = 5) +
     create_common_theme(base_size, legend.position) +
-    labs(x = "Age", 
-         y = sprintf("%s %s, Women/Men",
-                    str_to_title(sumstat_label), outcome_label), 
-         title = title,
-         caption = caption) +
+    labs(x = "Age", y = "") +
     scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
     guides(color = guide_legend(title="Birth Cohort"), 
            linetype = "none") + 
-    ylim(.5, 1) +
-    xlim(25, 55) +
-    geom_hline(yintercept = 1, linetype = "dashed")
+    scale_x_continuous(
+      breaks  = c(seq(25, 55, 5))) +
+    facet_grid(cols = vars(key), scales = "free_y")
+  
+  p_ratio <- plot_data %>%
+    select(AGE, BIRTHYEAR_DECADES, Ratio = ratio) %>%
+    gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
+    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES, 
+               linetype = "solid")) +
+    geom_line(size = 1) +
+    create_common_theme(base_size, "bottom") +
+    labs(x = "", y = "") +
+    scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
+    guides(color = guide_legend(title="Birth Cohort"), 
+           linetype = "none") + 
+    scale_x_continuous(
+      breaks  = c(seq(25, 55, 5))) +
+    facet_grid(cols = vars(key), scales = "free_y")
+  
+  p <- grid.arrange(p_gender, p_ratio, 
+                    left  = textGrob(
+                      sprintf("%s %s",sumstat_label, outcome_label),
+                      rot = 90,                             # vertical text
+                      gp  = gpar(fontsize = base_size, fontface = "bold")
+                    ))
   
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
-    # Generate bootstrapped data
-    bootstrap_data <- bootstrap_plot1_data(
-      data = data,
-      decades_to_include = decades_to_include,
-      conf_level = conf_level
-    )
+    
+    bootstrap_data <- read_rds("clean_data/plot1_data.rds") %>%
+      group_by(AGE, BIRTHYEAR_DECADES) %>% 
+      summarise(ci_lower = quantile(ratio, probs =  1-conf_level),
+                ci_upper = quantile(ratio, probs = conf_level))
     
     # Add confidence intervals as ribbons
     p <- p + 
@@ -271,12 +286,11 @@ create_plot2 <- function(data,
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
     # Generate bootstrapped data
-    bootstrap_data <- bootstrap_plot2_data(
-      data = data,
-      decades_to_include = decades_to_include,
-      start_age = start_age,
-      conf_level = conf_level
-    )
+    bootstrap_data <- read_rds("clean_data/plot2_data.rds") %>%
+      filter(BIRTHYEAR_DECADES != "1940s") %>%
+      group_by(AGE, BIRTHYEAR_DECADES) %>% 
+      summarise(ci_lower = quantile(ratio.change, probs =  1-conf_level),
+                ci_upper = quantile(ratio.change, probs = conf_level))
     
     # Add confidence intervals as ribbons
     p <- p + 
@@ -331,19 +345,20 @@ create_plot3 <- function(data,
     scenario_type = scenario_type
   )
   
+  plot_data <- counterfactual_result$data
+  
   # Get bootstrapped data if requested
   if (with_bootstrap) {
-    bootstrap_result <- bootstrap_counterfactual(
-      data,
-      group_var = group_var,
-      refcohort = refcohort,
-      start_age = start_age,
-      scenario_type = scenario_type,
-      conf_level = conf_level
-    )
-    plot_data <- bootstrap_result$data
-  } else {
-    plot_data <- counterfactual_result$data
+     bootstrap_data <- read_rds("clean_data/plotcount_data.rds") %>%
+      group_by(YEAR, key, group) %>% 
+      summarise(ci_lower = quantile(value, probs =  1-conf_level),
+                ci_upper = quantile(value, probs = conf_level))
+     
+     plot_data <- left_join(plot_data, 
+                            bootstrap_data %>%
+                              filter(key %in% unique(counterfactual_result$data$key)), 
+                            by = c("YEAR", "key", "group"))
+       
   }
   
   # Define colors and line types
@@ -390,16 +405,9 @@ create_plot3 <- function(data,
         ) %>%
         ggplot(aes(x = YEAR, y = value, color = key, linetype = key, label = label))
       
-      # Add confidence intervals if bootstrap data is available
-      if (with_bootstrap) {
-        p <- p + 
-          geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = key), 
-                      alpha = 0.2, color = NA) +
-          scale_fill_manual(values = colors, guide = "none")
-      }
-      
       p <- p +
-        geom_line(size = 1.5) +
+        geom_line(size = 1, alpha = .5) +
+        geom_point() +
         create_common_theme(base_size, c(0.05, .95)) +
         theme(legend.justification = c(0, 1)) +
         labs(
@@ -415,13 +423,6 @@ create_plot3 <- function(data,
         scale_x_continuous(breaks = round(seq(1970, 2020, by = 10))) +
         guides(color = guide_legend(title = "", ncol = 1, order = 1))
       
-      plot_list[[group]] <- p
-      
-    } else {
-      # Grouped plot style
-      p <- group_plot_data %>%
-        ggplot(aes(x = YEAR, y = value, color = key, linetype = key))
-      
       # Add confidence intervals if bootstrap data is available
       if (with_bootstrap) {
         p <- p + 
@@ -430,8 +431,15 @@ create_plot3 <- function(data,
           scale_fill_manual(values = colors, guide = "none")
       }
       
+      plot_list[[group]] <- p
+      
+    } else {
+      # Grouped plot style
+      p <- group_plot_data %>%
+        ggplot(aes(x = YEAR, y = value, color = key, linetype = key))
       p <- p +
-        geom_line(size = 1.5) +
+       geom_line(size = 1, alpha = .5) +
+        geom_point() +
         create_common_theme(base_size, "none") +
         labs(
           x = "Year",
@@ -442,6 +450,15 @@ create_plot3 <- function(data,
         scale_linetype_manual(guide = "none", values = line_types) +
         geom_hline(yintercept = 1, linetype = "dashed") +
         scale_x_continuous(breaks = round(seq(1970, 2020, by = 10)))
+      
+      # Add confidence intervals if bootstrap data is available
+      if (with_bootstrap) {
+        p <- p + 
+          geom_ribbon(data = bootstrap_data,
+                        aes(ymin = ci_lower, ymax = ci_upper, fill = key), 
+                      alpha = 0.2, color = NA) +
+          scale_fill_manual(values = colors, guide = "none")
+      }
       
       plot_list[[group]] <- p
     }
@@ -522,13 +539,11 @@ create_plot4 <- function(data,
   
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
-    # Generate bootstrapped data
-    bootstrap_data <- bootstrap_plot4_data(
-      data = data,
-      refcohort = refcohort,
-      ages_selection = ages_selection,
-      conf_level = conf_level
-    )
+
+    bootstrap_data <- read_rds("clean_data/plot4_data.rds") %>%
+      group_by(AGE_GROUP, BIRTHYEAR_GROUP, YEAR, FEMALE) %>% 
+      summarise(ci_lower = quantile(WAGE_REL_REF, probs =  1-conf_level),
+                ci_upper = quantile(WAGE_REL_REF, probs = conf_level))
     
     # Add confidence intervals as ribbons
     p <- p + 
@@ -602,14 +617,11 @@ create_plot5 <- function(data,
   
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
-    # Generate bootstrapped data
-    bootstrap_data <- bootstrap_plot5_data(
-      data = data,
-      refcohort = refcohort,
-      start_age = start_age,
-      cohort_groups = cohort_groups,
-      conf_level = conf_level
-    )
+    
+    bootstrap_data <- read_rds("clean_data/plot5_data.rds") %>%
+      group_by(AGE, BIRTHYEAR_GROUP, FEMALE) %>% 
+      summarise(ci_lower = quantile(WAGE.GROWTH, probs =  1-conf_level),
+                ci_upper = quantile(WAGE.GROWTH, probs = conf_level))
     
     # Add confidence intervals as ribbons
     p <- p + 
@@ -624,3 +636,4 @@ create_plot5 <- function(data,
   
   return(p)
 }
+
