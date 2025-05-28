@@ -1,16 +1,17 @@
 #------------------------------------------------------------------------------
 # PROJECT: TRENDS IN THE GENDER PAY GAP: NARROWING STARTING POINTS AND 
 # PERSISTENT LIFE COURSE DIVERGENCE
-# FILE: DATA CALCULATION FUNCTIONS
-# AUTHOR: NINO CRICCO (REORGANIZED)
+# FILE: DATA PREPARATION FUNCTIONS
+# AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
-# Loading libraries
+
+# LOADING LIBRARIES
 library(tidyverse)
 library(haven)
 library(Hmisc)
 
 #------------------------------------------------------------------------------
-# SUMMARY STATISTICS FUNCTIONS
+# FUNCTION TO GENERATE SUMMARY STATISTICS
 #------------------------------------------------------------------------------
 
 gen_outcome_sumstats <- function(data,
@@ -19,14 +20,9 @@ gen_outcome_sumstats <- function(data,
                                  sumstat = "mean",
                                  probs = 0.5,
                                  group_var = NULL,
-                                 use_age_group = FALSE,
                                  use_birth_group = "BIRTHYEAR") {
-  
-  if (use_age_group) {
-    use_birth_group <- "BIRTHYEAR_GROUP"
-  }
-  
-  # Setting which summary function to use
+
+  # Setting which statistic to use
   summary_func <- if(sumstat == "mean") {
     function(x, w) weighted.mean(x, w, na.rm = TRUE)
   } else if(sumstat == "quantile") {
@@ -36,31 +32,41 @@ gen_outcome_sumstats <- function(data,
   }
   
   # Defining Age/Cohort/Comparison group variables
-  group_cols <- list(
-    if(use_age_group) "AGE_GROUP" else "AGE",
-    use_birth_group,
+  group_cols <- c(
+    "AGE", "FEMALE", use_birth_group,
     # Only include YEAR if not using BIRTHYEAR_DECADES
-    if(use_birth_group != "BIRTHYEAR_DECADES") "YEAR" else NULL,
-    "FEMALE"
+    if(use_birth_group != "BIRTHYEAR_DECADES") "YEAR" 
   )
-  
-  # Remove NULL elements from group_cols
-  group_cols <- group_cols[!sapply(group_cols, is.null)]
   
   # Adding grouping variable if doing subgroup analyses
   if(!is.null(group_var)) {
     group_cols <- c(group_cols, group_var)
   }
   
+  if(!is.null(group_var)) {
   # Calculate summary statistics
   sumstats <- data %>%
-    group_by(across(all_of(unlist(group_cols)))) %>%
-    summarise(
-      MEAN.OUTCOME = summary_func(!!sym(outcome_var), !!sym(weight_var)),
-      n = n(),
-      .groups = "drop"
+    ungroup() %>%
+    add_count(FEMALE, YEAR, !!sym(group_var), name = "n_year") %>% 
+    group_by(across(all_of(group_cols))) %>%
+    summarise(MEAN.OUTCOME = summary_func(!!sym(outcome_var), !!sym(weight_var)),
+              n = n(), 
+              n_year = first(n_year),
+              .groups = "drop"
     )
-  
+  }
+  else if(is.null(group_var)){
+    sumstats <- data %>%
+      ungroup() %>%
+      add_count(FEMALE, YEAR, name = "n_year") %>% 
+      group_by(across(all_of(group_cols))) %>%
+      summarise(MEAN.OUTCOME = summary_func(!!sym(outcome_var), !!sym(weight_var)),
+                n = n(), 
+                n_year = first(n_year),
+                .groups = "drop"
+      )
+  }
+
   return(sumstats)
 }
 
@@ -68,26 +74,19 @@ gen_outcome_sumstats <- function(data,
 # DATA TRANSFORMATION FUNCTIONS FOR PLOT 1
 #------------------------------------------------------------------------------
 
-prepare_plot1_data <- function(data, 
-                              decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
+prepare_plot1_data <- function(data, decades_to_include = c(
+  "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
   
   transformed_data <- data %>%
     select(AGE, BIRTHYEAR_DECADES, FEMALE, MEAN.OUTCOME) %>% 
     filter(complete.cases(BIRTHYEAR_DECADES)) %>%
-    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 50 ~ 1,
-                            BIRTHYEAR_DECADES == "1980s" & AGE > 40 ~ 1,
-                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 30 ~ 1,
+    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 45 ~ 1,
+                            BIRTHYEAR_DECADES == "1980s" & AGE > 35 ~ 1,
+                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 25 ~ 1,
                             TRUE ~ 0)) %>%
-    filter(drop == 0, AGE <= 55) %>%
+    filter(drop == 0, AGE < 55) %>%
     pivot_wider(names_from = FEMALE, values_from = MEAN.OUTCOME) %>% 
     mutate(ratio = Women/Men) %>%
-    mutate(label = case_when(AGE == 25 & BIRTHYEAR_DECADES == "1990-1998" ~ BIRTHYEAR_DECADES,
-                             AGE == 35 & BIRTHYEAR_DECADES == "1980s" ~ BIRTHYEAR_DECADES,
-                             AGE == 44 & BIRTHYEAR_DECADES == "1970s" ~ BIRTHYEAR_DECADES,
-                             AGE == 47 & BIRTHYEAR_DECADES == "1960s" ~ BIRTHYEAR_DECADES,
-                             AGE == 55 & BIRTHYEAR_DECADES == "1950s" ~ BIRTHYEAR_DECADES,
-                             AGE == 35 & BIRTHYEAR_DECADES == "1940s" ~ BIRTHYEAR_DECADES,
-                             AGE == 52 & BIRTHYEAR_DECADES == "1930s" ~ BIRTHYEAR_DECADES)) %>%
     filter(BIRTHYEAR_DECADES %in% decades_to_include)
   
   return(transformed_data)
@@ -97,21 +96,16 @@ prepare_plot1_data <- function(data,
 # DATA TRANSFORMATION FUNCTIONS FOR PLOT 2
 #------------------------------------------------------------------------------
 
-prepare_plot2_data <- function(data, 
-                              decades_to_include = c("1940s", "1950s", "1960s", "1970s", "1980-1995"),
-                              start_age = 25) {
+prepare_plot2_data <- function(data, start_age = 25, decades_to_include = c(
+  "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
   
   transformed_data <- data %>%
     select(AGE, BIRTHYEAR_DECADES, FEMALE, MEAN.OUTCOME) %>%
     filter(complete.cases(BIRTHYEAR_DECADES)) %>%
     mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 45 ~ 1,
-                            BIRTHYEAR_DECADES == "1980-1995" & AGE > 35 ~ 1,
-                            TRUE ~ 0), 
-           label = case_when(AGE == start_age & BIRTHYEAR_DECADES == "1980-1995" ~ BIRTHYEAR_DECADES,
-                             AGE == 45 & BIRTHYEAR_DECADES == "1970s" ~ BIRTHYEAR_DECADES,
-                             AGE == 51 & BIRTHYEAR_DECADES == "1960s" ~ BIRTHYEAR_DECADES,
-                             AGE == 52 & BIRTHYEAR_DECADES == "1950s" ~ BIRTHYEAR_DECADES,
-                             AGE == 35 & BIRTHYEAR_DECADES == "1940s" ~ BIRTHYEAR_DECADES)) %>%
+                            BIRTHYEAR_DECADES == "1980s" & AGE > 35 ~ 1,
+                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 25 ~ 1,
+                            TRUE ~ 0)) %>%
     filter(drop == 0, AGE <= 55, AGE >= start_age) %>%
     pivot_wider(names_from = FEMALE, values_from = MEAN.OUTCOME) %>%
     mutate(ratio = Women/Men) %>%
@@ -119,89 +113,12 @@ prepare_plot2_data <- function(data,
     group_by(BIRTHYEAR_DECADES) %>%
     mutate(
       ratio.start = ifelse(AGE == start_age, ratio, NA),
-      ratio.start = tidyr::fill(data.frame(ratio.start), ratio.start, .direction = "down")$ratio.start,
+      ratio.start = tidyr::fill(
+        data.frame(ratio.start), ratio.start, .direction = "down")$ratio.start,
       ratio.change = (ratio - ratio.start) * 100
     )
   
   return(transformed_data)
-}
-
-#------------------------------------------------------------------------------
-# DATA TRANSFORMATION FUNCTIONS FOR PLOT 4
-#------------------------------------------------------------------------------
-
-prepare_plot4_data <- function(data, 
-                              refcohort = 1957,
-                              ages_selection = c(25, 34, 43, 55)) {
-  
-  # Get reference data using specified age
-  ref_data <- data %>% 
-    filter(BIRTHYEAR_GROUP == refcohort) %>%
-    ungroup() %>%  
-    transmute(
-      FEMALE, 
-      AGE_GROUP, 
-      REF_OUTCOME = MEAN.OUTCOME
-    )
-  
-  transformed_data <- data %>%
-    left_join(ref_data, by = c("FEMALE", "AGE_GROUP")) %>%
-    filter(BIRTHYEAR_GROUP >= refcohort, 
-           AGE_GROUP %in% c(ages_selection)) %>%
-    mutate(
-      WAGE_REL_REF = MEAN.OUTCOME/REF_OUTCOME,
-      AGE_GROUP = factor(AGE_GROUP)  # Convert to factor for proper legend ordering
-    )
-  
-  return(transformed_data)
-}
-
-#------------------------------------------------------------------------------
-# DATA TRANSFORMATION FUNCTIONS FOR PLOT 5
-#------------------------------------------------------------------------------
-
-prepare_plot5_data <- function(data, 
-                              refcohort = 1957,
-                              start_age = 25,
-                              cohort_groups = list(
-                                c(1958:1960, "1958-1960"),
-                                c(1968:1970, "1968-1970"),
-                                c(1978:1980, "1978-1980"),
-                                c(1988:1990, "1988-1990")
-                              )) {
-  
-  # Create reference data at start age
-  ref_data <- data %>% 
-    filter(AGE == start_age) %>%
-    ungroup() %>% 
-    transmute(
-      FEMALE, 
-      BIRTHYEAR, 
-      START_OUTCOME = MEAN.OUTCOME
-    )
-  
-  # Create cohort grouping expression dynamically
-  cohort_cases <- lapply(cohort_groups, function(group) {
-    years <- group[1:(length(group)-1)]
-    label <- group[length(group)]
-    quo(BIRTHYEAR %in% !!years ~ !!label)
-  })
-  
-  transformed_data <- data %>%
-    left_join(ref_data, by = c("FEMALE", "BIRTHYEAR")) %>%
-    mutate(WAGE.GROWTH = MEAN.OUTCOME/START_OUTCOME) %>%
-    filter(BIRTHYEAR > refcohort, AGE >= start_age) %>%
-    mutate(
-      BIRTHYEAR_GROUP = case_when(!!!cohort_cases),
-      BIRTHYEAR_GROUP = factor(BIRTHYEAR_GROUP, 
-                               levels = sapply(cohort_groups, function(x) x[length(x)])))
-  
-  summarized_data <- transformed_data %>% 
-    group_by(AGE, BIRTHYEAR_GROUP, FEMALE) %>%
-    filter(complete.cases(BIRTHYEAR_GROUP)) %>%
-    summarise(WAGE.GROWTH = mean(WAGE.GROWTH), .groups = "drop")
-  
-  return(summarized_data)
 }
 
 #------------------------------------------------------------------------------
@@ -212,7 +129,7 @@ prepare_counterfactual_data <- function(data,
                                        group_var = NULL,
                                        refcohort = 1957,
                                        start_age = 25,
-                                       scenario_type = "baseline") {
+                                       scenarios_to_include = "main") {
   
   # If no group_var specified, create a dummy group with constant value
   if (is.null(group_var)) {
@@ -224,34 +141,18 @@ prepare_counterfactual_data <- function(data,
   if (!is.factor(data[[group_var]])) {
     data[[group_var]] <- as.factor(data[[group_var]])
   }
-  
-  # Define scenarios and styling
-  scenario_names <- c(
-    "Observed",
-    "Baseline",
-    sprintf("Men %d, Women Observed", refcohort),
-    sprintf("Cohort Starting Wage, %d Trajectory", refcohort),
-    sprintf("%d Starting Wage, Cohort Trajectory", refcohort),
-    sprintf("Cohort Starting Wage, %d Trajectory, Men %d", refcohort, refcohort),
-    sprintf("%d Starting Wage, Cohort Trajectory, Men %d", refcohort, refcohort)
-  )
-  
-  scenarios_to_include <- if(scenario_type == "baseline") {
+
+  scenarios_to_include <- if(scenarios_to_include == "main") {
     c(
-      "Observed",
-      "Baseline",
-      sprintf("Cohort Starting Wage, %d Trajectory", refcohort),
-      sprintf("%d Starting Wage, Cohort Trajectory", refcohort)
+      "Observed", "Baseline", "No Change for Men",
+      "Changing Starting Points", "Changing Trajectories"
     )
-  } else if(scenario_type == "all") {
+  } else if(scenarios_to_include == "appendix") {
     c(
-      "Observed",
-      "Baseline",
-      sprintf("Cohort Starting Wage, %d Trajectory", refcohort),
-      sprintf("%d Starting Wage, Cohort Trajectory", refcohort),
-      sprintf("Cohort Starting Wage, %d Trajectory, Men %d", refcohort, refcohort),
-      sprintf("%d Starting Wage, Cohort Trajectory, Men %d", refcohort, refcohort),
-      sprintf("Men %d, Women Observed", refcohort)
+      "Observed", "Baseline", "No Change for Men",
+      "Changing Starting Points", "Changing Trajectories",
+      "Changing Starting Points, No Change for Men",
+      "Changing Trajectories, No Change for Men"
     )
   }
   
@@ -267,12 +168,6 @@ prepare_counterfactual_data <- function(data,
     
     # Calculate counterfactuals
     counterfactual_data <- group_data %>%
-      left_join(., group_data %>%
-                  group_by(YEAR, FEMALE) %>%
-                  summarise(
-                    n_year = sum(n), 
-                    .groups = "drop"),
-                by = c("YEAR", "FEMALE")) %>%
       arrange(BIRTHYEAR, YEAR, AGE) %>%
       mutate(
         lf_cohortprop = n/n_year,
@@ -319,14 +214,13 @@ prepare_counterfactual_data <- function(data,
       ) %>%
       gather(counterfactual, value, -c(YEAR, FEMALE)) %>%
       pivot_wider(names_from = c(FEMALE, counterfactual), values_from = value) %>%
-      mutate(
-        !!sprintf("Cohort Starting Wage, %d Trajectory", refcohort) := Women_c1/Men_c1,
-        !!sprintf("%d Starting Wage, Cohort Trajectory", refcohort) := Women_c2/Men_c2,
-        !!sprintf("Cohort Starting Wage, %d Trajectory, Men %d", refcohort, refcohort) := Women_c1/Men_c3,
-        !!sprintf("%d Starting Wage, Cohort Trajectory, Men %d", refcohort, refcohort) := Women_c2/Men_c3,
-        "Baseline" = Women_c3/Men_c3,
-        "Observed" = Women_agg/Men_agg,
-        !!sprintf("Men %d, Women Observed", refcohort) := Women_agg/Men_c3
+      mutate("Changing Starting Points" = Women_c1/Men_c1,
+             "Changing Trajectories" = Women_c2/Men_c2,
+             "Changing Starting Points, No Change for Men" = Women_c1/Men_c3,
+             "Changing Trajectories, No Change for Men" = Women_c2/Men_c3,
+             "Baseline" = Women_c3/Men_c3,
+             "Observed" = Women_agg/Men_agg,
+             "No Change for Men" = Women_agg/Men_c3
       ) %>%
       select(YEAR, all_of(scenarios_to_include)) %>%
       gather(key, value, -YEAR)

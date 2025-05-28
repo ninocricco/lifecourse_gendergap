@@ -21,38 +21,29 @@ cpi99 <- read_csv("raw_data/cpi99.csv")
 analytic.sample <- data_asec %>%
   mutate(AGE == AGE - 1,
          BIRTHYEAR = YEAR-AGE, 
+         BIRTHYEAR_DECADES = case_when(BIRTHYEAR %in% c(1913:1919) ~ "1913-1919",
+                                       BIRTHYEAR %in% c(1920:1929) ~ "1920s",
+                                       BIRTHYEAR %in% c(1930:1939) ~ "1930s",
+                                       BIRTHYEAR %in% c(1940:1949) ~ "1940s",
+                                       BIRTHYEAR %in% c(1950:1959) ~ "1950s",
+                                       BIRTHYEAR %in% c(1960:1969) ~ "1960s",
+                                       BIRTHYEAR %in% c(1970:1979) ~ "1970s",
+                                       BIRTHYEAR %in% c(1980:1989) ~ "1980s", 
+                                       BIRTHYEAR %in% c(1990:1998) ~ "1990-1998"),
          FEMALE = ifelse(SEX == 2, "Women", "Men"),
          EDUC = ifelse(EDUC == 999, NA, EDUC),
          EDUC = case_when(EDUC  <= 73 ~ "hs.or.less", 
                           EDUC < 110 ~ "some.college", 
                           EDUC >= 110 ~ "ba.plus"), 
-      #   RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "latino",
-       #                      RACE == 200 ~ "black",
-        #                     RACE == 100 ~ "white",
-         #                    TRUE ~ "other"), 
-         RACEETH = case_when(RACE == 200 ~ "black",
-                             RACE == 100 ~ "white",
-                             TRUE ~ "other"), 
+         EDUC2 = ifelse(EDUC == "ba.plus", "BA+", "<BA"),
+         RACEETH = case_when(RACE == 200 ~ "Black",
+                             RACE == 100 ~ "White",
+                             TRUE ~ "Other"), 
          MARRIED = case_when(MARST %in% c(1,2) ~ "married", 
                              MARST == 6 ~ "never.married", 
                              TRUE ~ "prev.married"), 
-        # FBORN = factor(ifelse(NATIVITY == 5, 1, 0)),
-      #   YNGCH.REC = case_when(YNGCH == 99 ~ "none", 
-       #                        YNGCH <= 5 ~ "under5", 
-        #                       YNGCH <= 18 ~ "under18", 
-         #                      TRUE ~ "over18"), 
-         #NCHILD.REC = case_when(NCHILD == 0 ~ "none", 
-        #                        NCHILD == 1 ~ "one", 
-        #                        NCHILD == 2 ~ "two", 
-        #                        TRUE ~ "threeplus"),
          INCWAGE = ifelse(INCWAGE == 99999999, NA, INCWAGE)) %>%
   filter(complete.cases(ASECWT)) %>% # Selecting only individuals w/ sample weights
-  # Excluding Agriculture and Military
-  #filter(IND1990 > 032) %>%
-  #filter(IND1990 < 940) %>%
-  # Excluding self-employed
-  #filter(CLASSWKR %in% c(20, 21, 22, 23, 24, 25, 27, 28)) %>%
-  #filter(INCWAGE > 0) %>% # Restricting to indivs. reporting positive wages
   filter(AGE >= 25 & AGE <= 55) %>% # Age Restrictions
   left_join(., cpi99, by = c("YEAR" = "year")) %>%
   # Creating variables: rough measure of birth cohort, log wage, categorical ed
@@ -73,16 +64,6 @@ analytic.sample.asec <- analytic.sample %>%
          # Creating predicted hourly wage variable
          UHRSWORKLY = na_if(UHRSWORKLY, 999),
          PRED.ANNHRSWRK = UHRSWORKLY * WKSWORK1,
-         PRED.HRLYWAGE.TOPCODE = INCWAGE.TOPCODE/PRED.ANNHRSWRK, 
-         BIRTHYEAR_DECADES = case_when(BIRTHYEAR %in% c(1913:1919) ~ "1913-1919",
-                                       BIRTHYEAR %in% c(1920:1929) ~ "1920s",
-                                       BIRTHYEAR %in% c(1925:1939) ~ "1930s",
-                                       BIRTHYEAR %in% c(1940:1949) ~ "1940s",
-                                       BIRTHYEAR %in% c(1950:1959) ~ "1950s",
-                                       BIRTHYEAR %in% c(1960:1969) ~ "1960s",
-                                       BIRTHYEAR %in% c(1970:1979) ~ "1970s",
-                                       BIRTHYEAR %in% c(1980:1995) ~ "1980-1995"),
-         AGE_GROUP = AGE - (AGE %% 3) + 1, 
-         BIRTHYEAR_GROUP = YEAR - AGE_GROUP) 
+         PRED.HRLYWAGE.TOPCODE = INCWAGE.TOPCODE/PRED.ANNHRSWRK) 
 
 write_rds(analytic.sample.asec, "clean_data/analytic_sample_asec.rds")

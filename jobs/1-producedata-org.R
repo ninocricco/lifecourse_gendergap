@@ -52,6 +52,7 @@ analytic_sample <- data_monthly %>%
          EDUC = case_when(EDUC  <= 73 ~ "hs.or.less", 
                           EDUC < 110 ~ "some.college", 
                           EDUC >= 110 ~ "ba.plus"), 
+         EDUC2 = ifelse(EDUC == "ba.plus", "BA+", "<BA"),
          HOURWAGE = na_codes(HOURWAGE, 999.99),
          EARNWEEK = na_codes(EARNWEEK, 9999.99), 
          UHRSWORKORG = na_codes(UHRSWORKORG, c(998, 999)), 
@@ -61,10 +62,10 @@ analytic_sample <- data_monthly %>%
                                 WKSTAT %in% c(20:42) ~ "pt", 
                                 WKSTAT %in% c(50, 60)~ "unemp"), 
          EARNWT = EARNWT/12,
-         RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "latino",
-                             RACE == 200 ~ "black",
-                             RACE == 100 ~ "white",
-                             TRUE ~ "other"), 
+         RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "Latino",
+                             RACE == 200 ~ "Black",
+                             RACE == 100 ~ "White",
+                             TRUE ~ "Other"), 
          MARRIED = case_when(MARST %in% c(1,2) ~ "married", 
                              MARST == 6 ~ "never.married", 
                              TRUE ~ "prev.married"), 
@@ -273,17 +274,15 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
          EARNHRLY_MAIN = EARNWEEK_TC/UHRSWORK1_PRED, 
          EARNHRLY_HRSCAP = EARNWEEK_TC/UHRSWORK1_PRED_CAP,
          BIRTHYEAR_DECADES = case_when(BIRTHYEAR %in% c(1913:1919) ~ "1913-1919",
-                                 BIRTHYEAR %in% c(1920:1929) ~ "1920s",
-                                 BIRTHYEAR %in% c(1930:1939) ~ "1930s",
-                                 BIRTHYEAR %in% c(1940:1949) ~ "1940s",
-                                 BIRTHYEAR %in% c(1950:1959) ~ "1950s",
-                                 BIRTHYEAR %in% c(1960:1969) ~ "1960s",
-                                 BIRTHYEAR %in% c(1970:1979) ~ "1970s",
-                                 BIRTHYEAR %in% c(1980:1989) ~ "1980s", 
-                                 BIRTHYEAR %in% c(1990:1998) ~ "1990-1998" 
-                                 ), 
-         AGE_GROUP = AGE - (AGE %% 3) + 1, 
-         BIRTHYEAR_GROUP = YEAR - AGE_GROUP)
+                                       BIRTHYEAR %in% c(1920:1929) ~ "1920s",
+                                       BIRTHYEAR %in% c(1930:1939) ~ "1930s",
+                                       BIRTHYEAR %in% c(1940:1949) ~ "1940s",
+                                       BIRTHYEAR %in% c(1950:1959) ~ "1950s",
+                                       BIRTHYEAR %in% c(1960:1969) ~ "1960s",
+                                       BIRTHYEAR %in% c(1970:1979) ~ "1970s",
+                                       BIRTHYEAR %in% c(1980:1989) ~ "1980s", 
+                                       BIRTHYEAR %in% c(1990:1998) ~ "1990-1998" 
+         ))
 
 analytic_sample_org %>%
   filter(ELIGORG == 1) %>%
@@ -331,7 +330,7 @@ analytic_sample_org %>%
   geom_vline(xintercept = 1993, linetype = "dashed", color = "red")
 
 analytic_sample_org_elig <- analytic_sample_org %>%
-  filter(ELIGORG == 1)
+  filter(ELIGORG == 1) %>%
 
 write_rds(analytic_sample_org, "clean_data/analytic_sample_org_all.rds")
 write_rds(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.rds")

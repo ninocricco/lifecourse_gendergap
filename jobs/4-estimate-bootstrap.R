@@ -1,13 +1,23 @@
 library(dplyr)
 library(tictoc) # For timing
 
+org <- read_rds("clean_data/analytic_sample_org_elig_weights.rds") %>%
+  mutate(UHRSWORK1_PRED = as.numeric(zap_labels(UHRSWORK1_PRED))) %>%
+  filter(UHRSWORK1_PRED > 0) %>%
+  mutate(RACEETH = case_when(RACEETH == "black" ~ "Black",
+                             RACEETH == "white" ~ "White",
+                             RACEETH == "latino" ~ "Latino",
+                             RACEETH == "other" ~ "Other"), 
+         EDUC2 = ifelse(EDUC == "ba.plus", "BA+", "<BA")
+  )
+
 # File to save checkpoint data
-saved_results_file <- "clean_data/bootstrap_results_checkpoint.RData"
+saved_results_file_app <- "clean_data/bootstrap_results_checkpoint.RData"
 
 # Check if we have saved results to resume from
-if(file.exists(saved_results_file)) {
+if(file.exists(saved_results_file_app)) {
   # Load previous progress
-  load(saved_results_file)
+  load(saved_results_file_app)
   
   # Find the maximum index that has data
   max_indices <- c(

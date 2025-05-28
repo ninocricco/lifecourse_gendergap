@@ -9,6 +9,7 @@ library(tidyverse)
 library(ggrepel)
 library(gridExtra)
 library(grid)
+library(viridis)
 
 # Source data calculation functions
 source("jobs/2-data-prep-functions.R")
@@ -20,7 +21,7 @@ source("jobs/2-data-prep-functions.R")
 # Color palettes
 color_palettes <- list(
   # Color palette for figures
-  viridis = c("#0d0887", "#46039f", "#9c179e", "#bd3786", "#d8576b", "#ed7953", "#fdb42f"),
+  viridis = magma(7, alpha = 1, begin = 0, end = .9, direction = 1),
   
   # Grayscale palettes
   decades_gray = c(
@@ -152,7 +153,9 @@ create_plot1 <- function(data,
                          caption = NULL,
                          base_size = 14, 
                          legend.position = "none",
-                         decades_to_include = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998"),
+                         decades_to_include = c(
+                           "1930s", "1940s", "1950s", "1960s", 
+                           "1970s", "1980s", "1990-1998"),
                          with_bootstrap = FALSE,
                          conf_level = 0.95) {
   
@@ -171,14 +174,19 @@ create_plot1 <- function(data,
     select(AGE, BIRTHYEAR_DECADES, Men, Women) %>%
     gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
     mutate(key = factor(key, levels = c("Men", "Women"))) %>%
-    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES, 
-               linetype = "solid")) +
-    geom_line(size = 1) +
-    create_common_theme(base_size, legend.position) +
-    labs(x = "Age", y = "") +
+    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES)) +
+    geom_point() +
+    geom_line() +
+    create_common_theme(base_size, "right") +
+    theme(
+      legend.position      = c(0.47, 0.8), 
+      legend.justification = c("right", "top"),
+      legend.direction     = "vertical",
+      legend.background    = element_rect(fill = alpha("white", .8), colour = NA)
+    ) +
+    labs(x = "", y = "") +
     scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
-    guides(color = guide_legend(title="Birth Cohort"), 
-           linetype = "none") + 
+    guides(color = guide_legend(title="Birth Cohort")) + 
     scale_x_continuous(
       breaks  = c(seq(25, 55, 5))) +
     facet_grid(cols = vars(key), scales = "free_y")
@@ -186,10 +194,10 @@ create_plot1 <- function(data,
   p_ratio <- plot_data %>%
     select(AGE, BIRTHYEAR_DECADES, Ratio = ratio) %>%
     gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
-    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES, 
-               linetype = "solid")) +
-    geom_line(size = 1) +
-    create_common_theme(base_size, "bottom") +
+    ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES)) +
+    geom_point() +
+    geom_line() +
+    create_common_theme(base_size, legend.position) +
     labs(x = "", y = "") +
     scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
     guides(color = guide_legend(title="Birth Cohort"), 
@@ -201,10 +209,14 @@ create_plot1 <- function(data,
   p <- grid.arrange(p_gender, p_ratio, 
                     left  = textGrob(
                       sprintf("%s %s",sumstat_label, outcome_label),
-                      rot = 90,                             # vertical text
+                      rot = 90, 
+                      gp  = gpar(fontsize = base_size, fontface = "bold")
+                    ),
+                    bottom  = textGrob(
+                      "Age",    
                       gp  = gpar(fontsize = base_size, fontface = "bold")
                     ))
-  
+
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
     
@@ -239,7 +251,8 @@ create_plot2 <- function(data,
                          caption = NULL,
                          base_size = 14,
                          data_source_label = "Outgoing Rotation Group", 
-                         decades_to_include = c("1940s", "1950s", "1960s", "1970s", "1980-1995"),
+                         decades_to_include = c("1950s", "1960s", 
+                           "1970s", "1980s"),
                          start_age = 25,
                          with_bootstrap = FALSE,
                          conf_level = 0.95) {
@@ -253,32 +266,30 @@ create_plot2 <- function(data,
   }
   
   # Prepare data for plotting
-  plot_data <- prepare_plot2_data(data, decades_to_include, start_age)
+  plot_data <- prepare_plot2_data(data, decades_to_include = decades_to_include,
+                                  start_age = start_age)
   
   # Create base plot
   p <- plot_data %>%
-    ggplot(aes(x = AGE, y = ratio.change, color = BIRTHYEAR_DECADES, 
-               label = label, linetype = "solid")) +
-    geom_line(size = 1.1) +
-    geom_label_repel(
-      box.padding = 4,
-      point.padding = 0.1,
-      show.legend = FALSE,
-      fill = "white",
-      size = 5
+    ggplot(aes(x = AGE, y = ratio.change, color = BIRTHYEAR_DECADES)) +
+    geom_point() +
+    geom_line() +
+    create_common_theme(base_size, "right") +
+    theme(
+      legend.position      = c(0.9, 0.3), 
+      legend.justification = c("right", "top"),
+      legend.direction     = "vertical",
+      legend.background    = element_rect(fill = alpha("white", .8), colour = NA)
     ) +
-    create_common_theme(base_size, "none") +
+    labs(x = "", y = "") +
+    scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
+    guides(color = guide_legend(title="Birth Cohort")) + 
     labs(
       x = "Age",
       y = sprintf(" %% Change from Age %d, %s %s",   
                  start_age, sumstat_label, outcome_label), 
       title = title,
       caption = caption) +
-    scale_color_manual(values = figs_cohort_colors(use_grayscale)) +
-    guides(
-      color = guide_legend(title = "Birth Cohort"),
-      linetype = "none"
-    ) +
     ylim(-15, 2) +
     xlim(start_age, 55) + 
     geom_hline(yintercept = 0, linetype = "dashed")
@@ -322,7 +333,7 @@ create_plot3 <- function(data,
                          data_source_label = "Outgoing Rotation Group",
                          refcohort = 1957,
                          start_age = 25,
-                         scenario_type = "baseline",
+                         scenarios_to_include = "main",
                          with_bootstrap = FALSE,
                          conf_level = 0.95) {
   
@@ -342,7 +353,7 @@ create_plot3 <- function(data,
     group_var = group_var,
     refcohort = refcohort,
     start_age = start_age,
-    scenario_type = scenario_type
+    scenarios_to_include = scenarios_to_include
   )
   
   plot_data <- counterfactual_result$data
@@ -364,21 +375,46 @@ create_plot3 <- function(data,
   # Define colors and line types
   scenario_names <- unique(plot_data$key)
   
-  # Define scenario colors
-  scenario_colors <- list(
-    grayscale = c("gray69", "gray37", "gray45", "gray25", "gray15", "gray55", "gray75"),
-    color = c("gray69", "gray37", "#ed7953", "#9FDA3AFF", "#9c179e", "#277F8EFF", "#0d0887")
-  )
-  
-  colors <- if(use_grayscale) {
-    setNames(scenario_colors$grayscale[1:length(scenario_names)], scenario_names)
+  scenario_colours <- if (use_grayscale) {
+    c(
+      "Observed"                                          = "gray10",
+      "Baseline"                                          = "gray10",
+      "No Change for Men"                                 = "gray70",
+      "Changing Starting Points"                          = "gray55",
+      "Changing Trajectories"                             = "gray30",
+      "Changing Starting Points, No Change for Men"       = "gray55",
+      "Changing Trajectories, No Change for Men"          = "gray30"
+    )
   } else {
-    setNames(scenario_colors$color[1:length(scenario_names)], scenario_names)
+    c(
+      "Observed"                                          = "#000000",
+      "Baseline"                                          = "#7F7F7F",
+      "No Change for Men"                                 = "#ED7953",
+      "Changing Starting Points"                          = "#9FDA3A",
+      "Changing Trajectories"                             = "#9C179E",
+      "Changing Starting Points, No Change for Men"       = "#277F8E",
+      "Changing Trajectories, No Change for Men"          = "#0D0887"
+    )
   }
   
-  line_types <- setNames(
-    c("solid", "solid", "dashed", "dashed", "dotted", "dashed", "dotted")[1:length(scenario_names)],
-    scenario_names
+  scenario_linetype <- c(
+    "Observed"                                          = "solid",
+    "Baseline"                                          = "solid",
+    "No Change for Men"                                 = "dotdash", 
+    "Changing Starting Points"                          = "dashed", 
+    "Changing Trajectories"                             = "dotted", 
+    "Changing Starting Points, No Change for Men"       = "dashed",
+    "Changing Trajectories, No Change for Men"          = "dotted"
+  )
+  
+  scenario_shapes <- c(
+    "Observed"                                          = 16,
+    "Baseline"                                          = 16,
+    "No Change for Men"                                 = 15, 
+    "Changing Starting Points"                          = 18, 
+    "Changing Trajectories"                             = 17, 
+    "Changing Starting Points, No Change for Men"       = 18,
+    "Changing Trajectories, No Change for Men"          = 17
   )
   
   # Process each group
@@ -390,38 +426,26 @@ create_plot3 <- function(data,
     group_plot_data <- plot_data %>% 
       filter(group == !!group)
     
-    # Create plot with correct styling based on group count
-    if (length(groups) == 1 && group == "All Data") {
-      # Single plot (original style)
-      p <- group_plot_data %>%
-        mutate(
-          label = case_when(
-            YEAR == 1982 & key == "Observed" ~ key,
-            YEAR == 1985 & key == "Baseline" ~ key,
-            YEAR == 1995 & key == sprintf("Cohort Starting Wage, %d Trajectory", refcohort) ~ key,
-            YEAR == 2000 & key == sprintf("%d Starting Wage, Cohort Trajectory", refcohort) ~ key,
-            TRUE ~ NA_character_
-          )
-        ) %>%
-        ggplot(aes(x = YEAR, y = value, color = key, linetype = key, label = label))
-      
-      p <- p +
-        geom_line(size = 1, alpha = .5) +
+    p <- group_plot_data %>%
+        ggplot(aes(
+          x = YEAR, y = value, color = key, shape = key, linetype = key)) +
+        geom_line() +
         geom_point() +
-        create_common_theme(base_size, c(0.05, .95)) +
-        theme(legend.justification = c(0, 1)) +
-        labs(
-          x = "Year",
-          y = sprintf("Women's / Men's %s %s",
-                      str_to_title(sumstat_label), outcome_label_axis),
-          title = title,
-          caption = caption
-        ) +
-        scale_colour_manual(values = colors) +
-        scale_linetype_manual(guide = "none", values = line_types) +
+        create_common_theme(base_size, "none") +
+        labs(title = group,
+          x = "",
+          y = "") +
+        scale_colour_manual(name = "Scenario",
+                            values = scenario_colours,
+                            breaks = scenario_names) +
+        scale_shape_manual (name = "Scenario",
+                            values = scenario_shapes,
+                            breaks = scenario_names) +
+        scale_linetype_manual(name = "Scenario",
+                            values = scenario_linetype,
+                            breaks = scenario_names) +
         geom_hline(yintercept = 1, linetype = "dashed") +
-        scale_x_continuous(breaks = round(seq(1970, 2020, by = 10))) +
-        guides(color = guide_legend(title = "", ncol = 1, order = 1))
+        scale_x_continuous(breaks = round(seq(1970, 2020, by = 10)))
       
       # Add confidence intervals if bootstrap data is available
       if (with_bootstrap) {
@@ -433,207 +457,38 @@ create_plot3 <- function(data,
       
       plot_list[[group]] <- p
       
-    } else {
-      # Grouped plot style
-      p <- group_plot_data %>%
-        ggplot(aes(x = YEAR, y = value, color = key, linetype = key))
-      p <- p +
-       geom_line(size = 1, alpha = .5) +
-        geom_point() +
-        create_common_theme(base_size, "none") +
-        labs(
-          x = "Year",
-          y = "",
-          title = group
-        ) +
-        scale_colour_manual(values = colors) +
-        scale_linetype_manual(guide = "none", values = line_types) +
-        geom_hline(yintercept = 1, linetype = "dashed") +
-        scale_x_continuous(breaks = round(seq(1970, 2020, by = 10)))
-      
-      # Add confidence intervals if bootstrap data is available
-      if (with_bootstrap) {
-        p <- p + 
-          geom_ribbon(data = bootstrap_data,
-                        aes(ymin = ci_lower, ymax = ci_upper, fill = key), 
-                      alpha = 0.2, color = NA) +
-          scale_fill_manual(values = colors, guide = "none")
-      }
-      
-      plot_list[[group]] <- p
-    }
-  }
+  } 
   
   # Return appropriate layout
   if (length(groups) == 1) {
-    return(plot_list[[1]])
+    return(
+      plot_list[[1]] + labs(
+        x = "Year",
+        y = sprintf("Women's / Men's %s %s",
+                    str_to_title(sumstat_label), outcome_label_axis),
+        title = title,
+        caption = caption) + theme(legend.justification = c(0, 1)) + 
+        theme(
+          legend.position      = c(0.4, 0.9), 
+          legend.justification = c("right", "top"),
+          legend.direction     = "vertical",
+          legend.background    = element_rect(fill = alpha("white", .8), colour = NA)
+        ))
   } else {
-    # Create legend from the first plot
-    legend_plot <- plot_list[[1]] + 
-      theme(legend.position = "bottom") +
-      guides(color = guide_legend(title = "", ncol = 3, order = 1))
-    legend <- g_legend(legend_plot)
-    
     # Arrange plots in grid with legend at bottom
     return(grid.arrange(
       do.call(arrangeGrob, c(plot_list, ncol = 2)),
-      legend,
-      left = sprintf("Women's/ Men's %s %s",
-                     str_to_title(sumstat_label), outcome_label_axis),
+      left =  textGrob(
+        sprintf("Women's/ Men's %s %s",
+                str_to_title(sumstat_label), outcome_label_axis),
+        rot = 90, 
+        gp  = gpar(fontsize = base_size, fontface = "bold")),
+      bottom =  textGrob("Year",
+                         gp  = gpar(fontsize = base_size, fontface = "bold")),
+      top = textGrob(title, 
+                     gp  = gpar(fontsize = base_size * 1.5, fontface = "bold")),
       ncol = 1,
       heights = c(10, 1)
     ))
   }
 }
-
-#------------------------------------------------------------------------------
-# PLOT 4: WOMEN'S AND MEN'S AGE-SPECIFIC WAGES RELATIVE TO REFERENCE COHORT
-#------------------------------------------------------------------------------
-
-create_plot4 <- function(data, 
-                         use_grayscale = FALSE,
-                         save_plot = FALSE,
-                         sumstat_label = "Average",
-                         outcome_label = "Hourly Wage",
-                         data_source_label = "Outgoing Rotation Group",
-                         title = NULL, 
-                         caption = NULL,
-                         refcohort = 1957,
-                         start_age = 25,
-                         base_size = 14,
-                         ages_selection = c(25, 34, 43, 55),
-                         with_bootstrap = FALSE,
-                         conf_level = 0.95) {
-  
-  if(is.null(title)) {
-    title <- sprintf("Women's and Men's Age-Specific %s %s\nRelative to %d Birth Cohort",
-                     str_to_title(sumstat_label), outcome_label, refcohort)
-  }
-  
-  if(is.null(caption)) {
-    caption <- create_caption(data_source_label)
-  }
-  
-  # Prepare data for plotting
-  plot_data <- prepare_plot4_data(data, refcohort, ages_selection)
-  
-  # Create base plot
-  p <- plot_data %>%
-    ggplot(aes(x = BIRTHYEAR_GROUP, y = WAGE_REL_REF, color = AGE_GROUP)) +
-    geom_line(size = 1) +
-    facet_wrap(~FEMALE) +
-    create_common_theme(base_size, c(0.05, 0.95)) +
-    theme(legend.justification = c(0, 1)) +
-    labs(
-      x = "Birth Cohort",
-      y = sprintf("%s %s Relative to %d Birth Cohort", 
-                  str_to_title(sumstat_label), outcome_label, refcohort),
-      title = title,
-      caption = caption
-    ) +
-    scale_color_manual(values = fig_age_colors(use_grayscale)) +
-    guides(
-      color = guide_legend(title = "Age Group", order = 1)
-    ) +
-    geom_hline(yintercept = 1, linetype = "dashed", color = "red")
-  
-  # Add confidence intervals if bootstrap is requested
-  if (with_bootstrap) {
-
-    bootstrap_data <- read_rds("clean_data/plot4_data.rds") %>%
-      group_by(AGE_GROUP, BIRTHYEAR_GROUP, YEAR, FEMALE) %>% 
-      summarise(ci_lower = quantile(WAGE_REL_REF, probs =  1-conf_level),
-                ci_upper = quantile(WAGE_REL_REF, probs = conf_level))
-    
-    # Add confidence intervals as ribbons
-    p <- p + 
-      geom_ribbon(
-        data = bootstrap_data,
-        aes(x = BIRTHYEAR_GROUP, ymin = ci_lower, ymax = ci_upper, fill = AGE_GROUP),
-        alpha = 0.2,
-        inherit.aes = FALSE
-      ) +
-      scale_fill_manual(values = fig_age_colors(use_grayscale), guide = "none")
-  }
-  
-  return(p)
-}
-
-#------------------------------------------------------------------------------
-# PLOT 5: WOMEN'S AND MEN'S PAY TRAJECTORIES BY COHORT
-#------------------------------------------------------------------------------
-
-create_plot5 <- function(data, 
-                         use_grayscale = TRUE,
-                         sumstat_label = "Average",
-                         outcome_label = "Hourly Wage",
-                         data_source_label = "Outgoing Rotation Group",
-                         refcohort = 1957,
-                         start_age = 25,
-                         base_size = 14,
-                         title = NULL, 
-                         caption = NULL,
-                         cohort_groups = list(
-                           c(1958:1960, "1958-1960"),
-                           c(1968:1970, "1968-1970"),
-                           c(1978:1980, "1978-1980"),
-                           c(1988:1990, "1988-1990")
-                         ),
-                         with_bootstrap = FALSE,
-                         conf_level = 0.95) {
-  
-  if(is.null(title)) {
-    title <- sprintf("Women's and Men's %s Pay Trajectories by Cohort",
-                     str_to_title(sumstat_label))
-  }
-  
-  if(is.null(caption)) {
-    caption <- create_caption(data_source_label)
-  }
-  
-  # Prepare data for plotting
-  plot_data <- prepare_plot5_data(data, refcohort, start_age, cohort_groups)
-  
-  # Create base plot
-  p <- plot_data %>%
-    ggplot(aes(x = AGE, y = WAGE.GROWTH, color = BIRTHYEAR_GROUP)) +
-    geom_line(size = 1) +
-    facet_wrap(~FEMALE) +
-    create_common_theme(base_size, c(0.35, .45)) +
-    theme(legend.justification = c(0, 1)) +
-    labs(
-      x = "Age",
-      y = sprintf("Age-Specific %s %s Relative to Age %d",
-                  str_to_title(sumstat_label), outcome_label, start_age),
-      title = title,
-      caption = caption
-    ) +
-    scale_color_manual(values = fig_cohort_colors(use_grayscale)) +
-    guides(
-      color = guide_legend(title = "Birth Cohort", order = 1),
-      linetype = "none"
-    ) +
-    geom_hline(yintercept = 1, linetype = "dashed", color = "red")
-  
-  # Add confidence intervals if bootstrap is requested
-  if (with_bootstrap) {
-    
-    bootstrap_data <- read_rds("clean_data/plot5_data.rds") %>%
-      group_by(AGE, BIRTHYEAR_GROUP, FEMALE) %>% 
-      summarise(ci_lower = quantile(WAGE.GROWTH, probs =  1-conf_level),
-                ci_upper = quantile(WAGE.GROWTH, probs = conf_level))
-    
-    # Add confidence intervals as ribbons
-    p <- p + 
-      geom_ribbon(
-        data = bootstrap_data,
-        aes(x = AGE, ymin = ci_lower, ymax = ci_upper, fill = BIRTHYEAR_GROUP),
-        alpha = 0.2,
-        inherit.aes = FALSE
-      ) +
-      scale_fill_manual(values = fig_cohort_colors(use_grayscale), guide = "none")
-  }
-  
-  return(p)
-}
-
