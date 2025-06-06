@@ -1,144 +1,12 @@
 #------------------------------------------------------------------------------
-# PROJECT: TRENDS IN THE GENDER PAY GAP: NARROWING STARTING POINTS AND 
-# PERSISTENT LIFE COURSE DIVERGENCE
-# FILE: VISUALIZATION FUNCTIONS
-# AUTHOR: NINO CRICCO (REORGANIZED)
-#------------------------------------------------------------------------------
-# Loading libraries
-library(tidyverse)
-library(ggrepel)
-library(gridExtra)
-library(grid)
-library(viridis)
-
-# Source data calculation functions
-source("jobs/2-data-prep-functions.R")
-
-#------------------------------------------------------------------------------
-# COMMON THEME AND COLOR PALETTE FUNCTIONS
+# PROJECT: GENDER PAY GAP STARTING POINTS AND LIFE COURSE DIVERGENCE
+# FILE: CREATING FIGURES FUNCTIONS
+# AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
 
-# Color palettes
-color_palettes <- list(
-  # Color palette for figures
-  viridis = magma(7, alpha = 1, begin = 0, end = .9, direction = 1),
-  
-  # Grayscale palettes
-  decades_gray = c(
-    "1930s" = "grey80",
-    "1940s" = "grey66",
-    "1950s" = "grey52",
-    "1960s" = "grey38",
-    "1970s" = "grey24",
-    "1980s" = "grey10",
-    "1990-1998" = "grey1"
-  ),
-  
-  age_gray = c(
-    "25" = "grey80",
-    "34" = "grey52",
-    "43" = "grey24",
-    "55" = "grey10"
-  ),
-  
-  cohort_gray = c(
-    "1988-1990" = "grey80",
-    "1978-1980" = "grey52",
-    "1968-1970" = "grey38",
-    "1958-1960" = "grey10"
-  )
-)
-
-# Function to get decades cohort colors
-figs_cohort_colors <- function(use_grayscale = TRUE) {
-  if(use_grayscale) {
-    return(color_palettes$decades_gray)
-  } else {
-    return(c(
-      "1930s" = color_palettes$viridis[7],
-      "1940s" = color_palettes$viridis[6],
-      "1950s" = color_palettes$viridis[5],
-      "1960s" = color_palettes$viridis[4],
-      "1970s" = color_palettes$viridis[3],
-      "1980s" = color_palettes$viridis[2],
-      "1990-1998" = color_palettes$viridis[1]
-    ))
-  }
-}
-
-# Function to get age colors
-fig_age_colors <- function(use_grayscale = TRUE) {
-  if(use_grayscale) {
-    return(color_palettes$age_gray)
-  } else {
-    return(c(
-      "25" = color_palettes$viridis[7],
-      "34" = color_palettes$viridis[5],
-      "43" = color_palettes$viridis[3],
-      "55" = color_palettes$viridis[1]
-    ))
-  }
-}
-
-# Function to get cohort colors
-fig_cohort_colors <- function(use_grayscale = TRUE) {
-  if(use_grayscale) {
-    return(color_palettes$cohort_gray)
-  } else {
-    return(c(
-      "1988-1990" = color_palettes$viridis[1],
-      "1978-1980" = color_palettes$viridis[3],
-      "1968-1970" = color_palettes$viridis[5],
-      "1958-1960" = color_palettes$viridis[7]
-    ))
-  }
-}
-
-# Common theme function for all plots
-create_common_theme <- function(base_size = 14, legend_position = "none") {
-  theme_bw() +
-  theme(
-    # Text elements
-    plot.title = element_text(hjust = 0.5, size = base_size * 1.2, face = "bold", margin = margin(0, 0, 10, 0)),
-    plot.subtitle = element_text(hjust = 0.5, size = base_size * 0.9, margin = margin(0, 0, 10, 0)),
-    plot.caption = element_text(size = base_size * 0.7, face = "italic", margin = margin(10, 0, 0, 0)),
-    axis.title = element_text(size = base_size * 0.9, face = "bold"),
-    axis.text = element_text(size = base_size * 0.8),
-    legend.title = element_text(size = base_size * 0.9, face = "bold"),
-    legend.text = element_text(size = base_size * 0.8),
-    strip.text = element_text(size = base_size * 0.9, face = "bold"),
-    
-    # Plot elements
-    panel.grid.minor = element_blank(),
-    panel.grid.major = element_line(color = "gray90"),
-    panel.border = element_rect(color = "gray40", fill = NA),
-    legend.background = element_rect(fill = "white", color = NA),
-    legend.key = element_rect(fill = "white"),
-    strip.background = element_rect(fill = "gray95"),
-    legend.position = legend_position,
-    
-    # Overall aesthetics
-    plot.background = element_rect(fill = "white", color = NA),
-    plot.margin = margin(15, 15, 15, 15)
-  )
-}
-
-# Helper function to extract legend from a ggplot
-g_legend <- function(a.gplot) {
-  tmp <- ggplot_gtable(ggplot_build(a.gplot))
-  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
-  legend <- tmp$grobs[[leg]]
-  return(legend)
-}
-
-# Helper function to create standard caption
-create_caption <- function(data_source_label, additional_text = NULL) {
-  caption <- sprintf("Data from the Current Population Survey %s", data_source_label)
-  if (!is.null(additional_text)) {
-    caption <- paste(caption, additional_text, sep = ". ")
-  }
-  return(caption)
-}
+# Source data calculation AND HELPER functions
+source("jobs/0-helperfunctions.R")
+source("jobs/3-data-prep-functions.R")
 
 #------------------------------------------------------------------------------
 # PLOT 1: GENDER WAGE GAP BY AGE AND COHORT
@@ -290,7 +158,7 @@ create_plot2 <- function(data,
                  start_age, sumstat_label, outcome_label), 
       title = title,
       caption = caption) +
-    ylim(-15, 2) +
+    ylim(-20, 2) +
     xlim(start_age, 55) + 
     geom_hline(yintercept = 0, linetype = "dashed")
   

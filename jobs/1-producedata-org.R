@@ -1,28 +1,12 @@
 #------------------------------------------------------------------------------
-# PROJECT: TRENDS IN THE GENDER PAY GAP: NARROWING STARTING POINTS AND 
-# PERSISTENT LIFE COURSE DIVERGENCE
-# FILE: GENERATES ANALYTIC DATA FROM RAW IPUMS DATA- OUTGOING ROTATION GROUP
+# PROJECT: GENDER PAY GAP STARTING POINTS AND LIFE COURSE DIVERGENCE
+# FILE: GENERATING ORG ANALYTIC SAMPLE FROM RAW IPUMS DATA
 # AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
-
-# Loading libraries
-library(tidyverse)
-library(ipumsr)
-library(janitor)
-library(Hmisc)
-library(ggrepel)
-library(gridExtra)
-library(grid)
-
 # NOTE: To load data, you must download both the extract's data and the DDI and 
-# also set the working directory to the folder with these files 
-# (or change the path below).
-
-setwd("/n/holylabs/LABS/killewald_lab/Lab/GenderWageGap/lifecourse_gendergap")
+# also set the wd to the folder with these files (or change the path below).
 
 source("jobs/0-helperfunctions.R")
-
-if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
 
 ddi_monthly <- read_ipums_ddi("raw_data/cps_00021.xml")
 
@@ -30,11 +14,17 @@ ddi_monthly <- read_ipums_ddi("raw_data/cps_00021.xml")
 cpi99 <- read_csv("raw_data/cpi99.csv")
 
 # Read in IPUMS CPS data
-data_monthly <- read_ipums_micro(ddi_monthly) %>%
+data_monthly <- read_ipums_micro(
+  ddi_monthly, 
+  vars = c("YEAR", "MISH", "AGE", "IND1990", "CLASSWKR", "SEX", 
+           "EDUC", "ELIGORG", "HOURWAGE", "EARNWEEK", "PAIDHOUR", 
+           "UHRSWORKORG", "UHRSWORK1", "WKSTAT", "EARNWT", "HISPAN",
+           "RACE", "MARST", "NATIVITY", "YNGCH", "NCHILD")) %>%
   # Filtering and removing unnecessary raw data for space constraints
   filter(YEAR >= 1980) %>%
   filter(YEAR < 2024) %>%
-  filter(MISH %in% c(4, 8)) %>% # Select only months eligible for ORG interview
+  # Select only months eligible for ORG interview
+  filter(MISH %in% c(4, 8)) %>% 
   filter(AGE >= 21 & AGE <= 55) %>%
   # Excluding Agriculture and Military
   filter(IND1990 > 032) %>%
@@ -44,9 +34,9 @@ data_monthly <- read_ipums_micro(ddi_monthly) %>%
 
 # Recoding IPUMS variables
 analytic_sample <- data_monthly %>% 
+  # Merging in CPI inflation adjustment 
   left_join(., cpi99, by = c("YEAR" = "year")) %>%
-  mutate(AGE = AGE - 1,
-         BIRTHYEAR = YEAR-AGE, 
+  mutate(BIRTHYEAR = YEAR-AGE, 
          FEMALE = ifelse(SEX == 2, "Women", "Men"),
          EDUC = ifelse(EDUC == 999, NA, EDUC),
          EDUC = case_when(EDUC  <= 73 ~ "hs.or.less", 
@@ -114,6 +104,9 @@ analytic_sample <- data_monthly %>%
 # 1994 CPS questionnaire redesign
 # see: https://ceprdata.s3.amazonaws.com/data/cps/CEPR_ORG_Wages.pdf
 #------------------------------------------------------------------------------
+
+# Diagnostics figure to show what % of ORG eligible respondents report 
+# "hours vary" by year and sex
 fig_diag_hrsvary <- analytic_sample %>%
   filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
@@ -128,31 +121,33 @@ fig_diag_hrsvary <- analytic_sample %>%
         legend.title = element_blank()) +
   geom_vline(xintercept = 1994, color = "red", linetype = "dashed")
 
-# Among those with UHRSWORK1_HRSVARY_FLAG == 0, fit separate models by FEMALE and
-# WKSTAT_SUM predicting UHRSWORK1 as a function of age, race, education, 
-# marital status, and 
+# Among those with UHRSWORK1_HRSVARY_FLAG == 0, 
+# fit separate models by FEMALE and WKSTAT_SUM predicting UHRSWORK1 
+# as a function of age, race, education, marital status, and nativity
 
 # First split data into estimation and prediction samples
 hrsvary_estimation <- analytic_sample %>%
   filter(UHRSWORK1_HRSVARY_FLAG != 1)
 
 # Get a sense for missingness for reasons other than "Hours vary"
-# Note: when we filter to ELIGORG eligibile respondents, there is no missingness
+# Note: When we filter to ELIGORG eligibile respondents, there is no missingness
 # beyond hours vary, but at this stage we keep all respondents in the ORG
 # months even if they are not ORG eligible for later selection into 
 # ORG prediction models
 length(which(is.na(hrsvary_estimation$UHRSWORK1)))/dim(hrsvary_estimation)[1]
 
-# Create nested dataframes by group for both samples
+# Create nested dataframes by group for men, women by reported ft/pt status
 model_hrsvary <- hrsvary_estimation %>%
-  filter(!is.na(UHRSWORK1)) %>%
+  filter(ELIGORG == 1) %>%
   group_by(FEMALE, WKSTAT_SUM) %>%
   nest() %>%
   # Fit models for each group
   mutate(
-    model = map(data, ~ lm(UHRSWORK1 ~ AGE + RACEETH + MARRIED + FBORN + EDUC, data = .x))
+    model = map(
+      data, ~ lm(UHRSWORK1 ~ AGE + RACEETH + MARRIED + FBORN + EDUC, data = .x))
   )
 
+# For workers who report hours vary, benerate predicted hours
 hrsvary_data <- analytic_sample %>%
   filter(UHRSWORK1_HRSVARY_FLAG == 1) %>%
   group_by(FEMALE, WKSTAT_SUM) %>%
@@ -164,14 +159,18 @@ hrsvary_data <- analytic_sample %>%
   select(-model) %>%
   unnest(cols = c(data, predictions))
 
-# Combine everything back together
+# Combine dataframes, workers reporting hours + workers reporting hours vary
 analytic_sample_hrsvary <- bind_rows(
   hrsvary_estimation %>% mutate(UHRSWORK1_PRED = UHRSWORK1),
   hrsvary_data %>% mutate(UHRSWORK1_PRED = predictions)) %>%
   arrange(row_number()) %>%
+  # Additional variable capping hours worked (obs or predicted) at 40
   mutate(UHRSWORK1_PRED_CAP = ifelse(UHRSWORK1_PRED > 40, 40, UHRSWORK1_PRED))
 
-analytic_sample_hrsvary %>%
+# Diagnostic plot comparing mean hours worked with list-wise deletion of workers
+# reporting hours vary vs. imputing hours worked
+
+fig_hrsvary_pred <- analytic_sample_hrsvary %>%
   filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
   summarise(UHRSWORK1_PRED = wtd.mean(UHRSWORK1_PRED, weight = EARNWT), 
@@ -181,18 +180,25 @@ analytic_sample_hrsvary %>%
   geom_line() +
   theme_bw() +
   facet_wrap(~FEMALE) +
-  labs(title = "Diagnostics Plot: Mean Usual Hours Worked, List-wise Deletion and Imputation, CPS Outgoing Rotation Group",
+  labs(title = "Diagnostics Plot: Mean Usual Hours Worked, List-wise Deletion 
+       and Imputation, CPS Outgoing Rotation Group",
        y = "Share", x = "Year") +
   theme(legend.position = "bottom", 
         plot.title = element_text(hjust = .5),
         legend.title = element_blank()) +
   geom_vline(xintercept = 1994, color = "red", linetype = "dashed")
 
+ggsave("figures/draft_paper/diagnostic_plots/hoursvary.pdf",
+       grid.arrange(fig_diag_hrsvary, fig_hrsvary_pred, ncol = 1),
+       width = 10, height = 10, dpi = 500, units = "in")
+
 #------------------------------------------------------------------------------
 # Procedure to adjust for changes in top-coding using log-normal distribution 
 # to estimate mean and variance above the topcode 
 # see: https://ceprdata.s3.amazonaws.com/data/cps/CEPR_ORG_Wages.pdf
 #------------------------------------------------------------------------------
+
+# Diagnostic plot, share of workers reporting weekly earnings above the topcode
 fig_diag_topcode <- analytic_sample_hrsvary %>%
   filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
@@ -227,6 +233,7 @@ analytic_sample_recoded_topcode <- analytic_sample_hrsvary %>%
   ) %>% 
   ungroup()
 
+# Diagnostic plot, mean earnings w/topcode vs. adjusting topcode
 fig_mean_earnings_topcode_adj <- analytic_sample_recoded_topcode %>%
   group_by(FEMALE, YEAR) %>%
   summarise(EARNWEEK_TC = wtd.mean(EARNWEEK_TC, weight = EARNWT), 
@@ -243,6 +250,10 @@ fig_mean_earnings_topcode_adj <- analytic_sample_recoded_topcode %>%
         legend.title = element_blank()) +
   geom_vline(xintercept = 1989, color = "red", linetype = "dashed") +
   geom_vline(xintercept = 1998, color = "red", linetype = "dashed")
+
+ggsave("figures/draft_paper/diagnostic_plots/topcode.pdf",
+       grid.arrange(fig_diag_topcode, fig_mean_earnings_topcode_adj, ncol = 1),
+       width = 8, height = 8, dpi = 500, units = "in")
 
 # For the period 1979-2002, the most consistent and
 # robust hourly wage series:  (2) excludes
@@ -269,6 +280,7 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                                        UHRSWORK1 == 0 ~ NA,
                                        PAIDHOUR != 2 ~ EARNWEEK_TC/UHRSWORK1_PRED),
          EARNHRLY_FLAG = case_when(PAIDHOUR == 2 ~ "Hourly",
+                                   # THERE ARE 987 OBS REPORTING PAID WEEKLY BUT 0 HOURS WORKED
                                    UHRSWORK1 == 0 ~ "None", 
                                    PAIDHOUR != 2 ~ "Weekly"), 
          EARNHRLY_MAIN = EARNWEEK_TC/UHRSWORK1_PRED, 
@@ -284,11 +296,9 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                                        BIRTHYEAR %in% c(1990:1998) ~ "1990-1998" 
          ))
 
-analytic_sample_org %>%
-  filter(ELIGORG == 1) %>%
-  tabyl(YEAR, UHRSWORK1_HRSVARY_FLAG)
+# Diagnostic plot, mean wages at age 25 with different wage measures
 
-analytic_sample_org %>%
+means_25_wagemeasures <- analytic_sample_org %>%
   filter(ELIGORG == 1) %>% filter(AGE == 25) %>% 
   group_by(BIRTHYEAR, FEMALE, YEAR) %>% 
   summarise(across(
@@ -298,13 +308,23 @@ analytic_sample_org %>%
   )) %>% 
   gather(KEY, VALUE, -c(BIRTHYEAR, FEMALE, YEAR)) %>%
   mutate(KEY_2 = ifelse(KEY %in% c("EARNHRLY", "HOURWAGE"), "Hourly", "Weekly")) %>%
-  filter(KEY == "EARNHRLY") %>%
   ggplot(aes(x = YEAR, y = VALUE, linetype = FEMALE)) +
+  facet_grid(rows = vars(KEY), scales = "free") +
   geom_line() +
   theme_bw() +
-  geom_vline(xintercept = 1994, color = "red", linetype = "dashed")
+  labs(title = "Weighted Means, Age 25 Wage Measures Across Years") +
+  geom_vline(xintercept = 1994, color = "red", linetype = "dashed") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = .5)) +
+  guides(linetype = guide_legend(""))
 
-analytic_sample_org %>%
+ggsave("figures/draft_paper/diagnostic_plots/means_25_wagemeasures.pdf",
+       means_25_wagemeasures,
+       width = 8, height = 8, dpi = 500, units = "in")
+
+# Diagnostic table and plot, share reporting earnings weekly/hourly
+
+table_reporting_wages_type_pct <- analytic_sample_org %>%
   filter(ELIGORG == 1) %>% 
   filter(FEMALE == "Women", EARNHRLY_FLAG != "None") %>%
   tabyl(YEAR, EARNHRLY_FLAG) %>%
@@ -317,7 +337,25 @@ analytic_sample_org %>%
               adorn_percentages("row"), by = "YEAR") %>%
   mutate_if(is.numeric, round, digits = 3)
 
-analytic_sample_org %>%
+write_csv(table_reporting_wages_type_pct, 
+          "figures/draft_paper/diagnostic_plots/table_reporting_wages_type_pct.csv")
+
+reporting_wages_pct <- table_reporting_wages_type_pct %>%
+  gather(key, value, -YEAR) %>%
+  separate(key, c("gender", "type"), "_") %>%
+  filter(type == "Hourly") %>%
+  ggplot(aes(x = YEAR, y = value)) +
+  geom_line() +
+  theme_bw() +
+  facet_wrap(~gender) +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = .5)) +
+  labs(y = "Percent", x = "Year", 
+       title = "Share of Workers Reporting Hourly (vs. Weekly) Earnings") +
+  guides(linetype = guide_legend(""))
+
+# Diagnostic plot, mean wages among those reporting earnings weekly/hourly
+
+reporting_wages_means  <- analytic_sample_org %>%
   filter(ELIGORG == 1, EARNHRLY_FLAG != "None") %>% 
   group_by(YEAR, FEMALE, EARNHRLY_FLAG) %>%
   summarise(mean_earnings = wtd.mean(EARNHRLY, weight = EARNWT)) %>%
@@ -325,12 +363,23 @@ analytic_sample_org %>%
   geom_line() +
   theme_bw() +
   facet_wrap(~FEMALE) +
-  theme(legend.position = "bottom") +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = .5)) +
+  labs(y = "Mean", x = "Year",
+       title = "Mean Wages Among Workers Reporting Hourly/Weekly Earnings") +
   geom_vline(xintercept = 1988, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = 1993, linetype = "dashed", color = "red")
+  geom_vline(xintercept = 1993, linetype = "dashed", color = "red") +
+  guides(linetype = guide_legend("Earnings Reported"))
+
+ggsave("figures/draft_paper/diagnostic_plots/type_reporting.pdf",
+       grid.arrange(reporting_wages_pct, reporting_wages_means, ncol = 1),
+       width = 8, height = 8, dpi = 500, units = "in")
+
+# Writing out clean analytic data files, both all monthly + only ORG eligible
 
 analytic_sample_org_elig <- analytic_sample_org %>%
-  filter(ELIGORG == 1) %>%
+  filter(ELIGORG == 1)
 
 write_rds(analytic_sample_org, "clean_data/analytic_sample_org_all.rds")
 write_rds(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.rds")
+write_csv(analytic_sample_org, "clean_data/analytic_sample_org_all.csv")
+write_csv(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.csv")

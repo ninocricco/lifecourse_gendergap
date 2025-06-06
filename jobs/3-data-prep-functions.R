@@ -1,14 +1,10 @@
 #------------------------------------------------------------------------------
-# PROJECT: TRENDS IN THE GENDER PAY GAP: NARROWING STARTING POINTS AND 
-# PERSISTENT LIFE COURSE DIVERGENCE
-# FILE: DATA PREPARATION FUNCTIONS
+# PROJECT: GENDER PAY GAP STARTING POINTS AND LIFE COURSE DIVERGENCE
+# FILE: DATA PREP FUNCTIONS
 # AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
 
-# LOADING LIBRARIES
-library(tidyverse)
-library(haven)
-library(Hmisc)
+source("jobs/0-helperfunctions.R")
 
 #------------------------------------------------------------------------------
 # FUNCTION TO GENERATE SUMMARY STATISTICS
@@ -20,7 +16,8 @@ gen_outcome_sumstats <- function(data,
                                  sumstat = "mean",
                                  probs = 0.5,
                                  group_var = NULL,
-                                 use_birth_group = "BIRTHYEAR") {
+                                 use_birth_group = "BIRTHYEAR", 
+                                 winsorize = c("bottom" = .005, "top" = .995)) {
 
   # Setting which statistic to use
   summary_func <- if(sumstat == "mean") {
@@ -43,13 +40,26 @@ gen_outcome_sumstats <- function(data,
     group_cols <- c(group_cols, group_var)
   }
   
+  if(!is.null(winsorize)){
+    data <- data %>%
+      group_by(YEAR) %>% 
+      mutate(
+        bottom = wtd.quantile(!!sym(outcome_var), winsorize[["bottom"]], weight = !!sym(weight_var), na.rm = TRUE),
+        top = wtd.quantile(!!sym(outcome_var), winsorize[["top"]], weight = !!sym(weight_var), na.rm = TRUE),
+        MEAN.OUTCOME = pmin(pmax(!!sym(outcome_var), bottom), top))
+  }
+  else if(is.null(winsorize)){
+    data <- data %>%
+      mutate(MEAN.OUTCOME = !!sym(outcome_var))
+  }
+  
   if(!is.null(group_var)) {
   # Calculate summary statistics
   sumstats <- data %>%
     ungroup() %>%
     add_count(FEMALE, YEAR, !!sym(group_var), name = "n_year") %>% 
     group_by(across(all_of(group_cols))) %>%
-    summarise(MEAN.OUTCOME = summary_func(!!sym(outcome_var), !!sym(weight_var)),
+    summarise(MEAN.OUTCOME = summary_func(MEAN.OUTCOME, !!sym(weight_var)),
               n = n(), 
               n_year = first(n_year),
               .groups = "drop"
@@ -60,7 +70,7 @@ gen_outcome_sumstats <- function(data,
       ungroup() %>%
       add_count(FEMALE, YEAR, name = "n_year") %>% 
       group_by(across(all_of(group_cols))) %>%
-      summarise(MEAN.OUTCOME = summary_func(!!sym(outcome_var), !!sym(weight_var)),
+      summarise(MEAN.OUTCOME = summary_func(MEAN.OUTCOME, !!sym(weight_var)),
                 n = n(), 
                 n_year = first(n_year),
                 .groups = "drop"
