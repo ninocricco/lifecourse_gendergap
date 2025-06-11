@@ -7,6 +7,7 @@
 # and also set the wd to the folder with these files (or change the path below).
 
 source("jobs/0-helperfunctions.R")
+library(ipumsr)
 
 ddi <- read_ipums_ddi("raw_data/cps_00019.xml")
 data_asec <- read_ipums_micro(ddi)
@@ -46,11 +47,6 @@ mutate(
   INCWAGE = ifelse(INCWAGE == 99999999, NA, INCWAGE)) %>%
   filter(complete.cases(ASECWT)) %>% # Selecting only individuals w/ + weights
   filter(AGE >= 25 & AGE <= 55) %>% # Age Restrictions
-  # Excluding Agriculture and Military
-  filter(IND1990 > 032) %>%
-  filter(IND1990 < 940) %>%
-  # Excluding self-employed
-  filter(CLASSWKR %in% c(20, 21, 22, 23, 24, 25, 27, 28)) %>%
   left_join(., cpi99, by = c("YEAR" = "year")) %>%
 # Creating variables: rough measure of birth cohort, log wage, categorical ed
 mutate(across(c(INCWAGE, FTOTVAL, INCTOT), ~.x * cpi1999 * 1.553),

@@ -25,6 +25,7 @@ create_plot1 <- function(data,
                            "1930s", "1940s", "1950s", "1960s", 
                            "1970s", "1980s", "1990-1998"),
                          with_bootstrap = FALSE,
+                         bootstrap_path = "bootstrap_estimates/main/fig1_bootstrapped_estimates.rds",
                          conf_level = 0.95) {
   
   if(is.null(title)) {
@@ -38,10 +39,34 @@ create_plot1 <- function(data,
   # Prepare data for plotting
   plot_data <- prepare_plot1_data(data, decades_to_include)
   
-  p_gender <- plot_data %>%
+  p_gender_data <- plot_data %>%
     select(AGE, BIRTHYEAR_DECADES, Men, Women) %>%
     gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
-    mutate(key = factor(key, levels = c("Men", "Women"))) %>%
+    mutate(key = factor(key, levels = c("Men", "Women")))
+  
+  p_ratio_data <- plot_data %>%
+    select(AGE, BIRTHYEAR_DECADES, ratio) %>%
+    gather(key, value, -c(AGE, BIRTHYEAR_DECADES))
+  
+  if (with_bootstrap) {
+    
+    bootstrap_data <- read_rds(bootstrap_path) %>%
+      gather(key, value, -c(AGE, BIRTHYEAR_DECADES, drop)) %>%
+      group_by(AGE, BIRTHYEAR_DECADES, key) %>% 
+      summarise(ci_lower = quantile(value, probs =  1-conf_level),
+                ci_upper = quantile(value, probs = conf_level))
+    
+    p_gender_data <- left_join(p_gender_data,
+                          bootstrap_data %>% filter(key != "ratio"),
+                          by = c("AGE", "BIRTHYEAR_DECADES", "key"))
+    
+    p_ratio_data <- left_join(p_ratio_data,
+                               bootstrap_data %>% filter(key == "ratio"),
+                               by = c("AGE", "BIRTHYEAR_DECADES", "key"))
+    
+  }
+  
+  p_gender <- p_gender_data %>%
     ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES)) +
     geom_point() +
     geom_line() +
@@ -59,9 +84,8 @@ create_plot1 <- function(data,
       breaks  = c(seq(25, 55, 5))) +
     facet_grid(cols = vars(key), scales = "free_y")
   
-  p_ratio <- plot_data %>%
-    select(AGE, BIRTHYEAR_DECADES, Ratio = ratio) %>%
-    gather(key, value, -c(AGE, BIRTHYEAR_DECADES)) %>%
+  p_ratio <- p_ratio_data %>%
+    mutate(key = "Ratio") %>%
     ggplot(aes(x = AGE, y = value, color = BIRTHYEAR_DECADES)) +
     geom_point() +
     geom_line() +
@@ -74,6 +98,22 @@ create_plot1 <- function(data,
       breaks  = c(seq(25, 55, 5))) +
     facet_grid(cols = vars(key), scales = "free_y")
   
+  if (with_bootstrap) {
+    p_gender <- p_gender +
+      geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, 
+                      fill = BIRTHYEAR_DECADES), 
+                  alpha = 0.5, color = NA) +
+      scale_fill_manual(values = figs_cohort_colors(use_grayscale)) +
+      guides(fill = "none")
+    
+    p_ratio <- p_ratio +
+      geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, 
+                      fill = BIRTHYEAR_DECADES), 
+                  alpha = 0.5, color = NA) +
+      scale_fill_manual(values = figs_cohort_colors(use_grayscale)) +
+      guides(fill = "none")
+  }
+  
   p <- grid.arrange(p_gender, p_ratio, 
                     left  = textGrob(
                       sprintf("%s %s",sumstat_label, outcome_label),
@@ -84,25 +124,6 @@ create_plot1 <- function(data,
                       "Age",    
                       gp  = gpar(fontsize = base_size, fontface = "bold")
                     ))
-
-  # Add confidence intervals if bootstrap is requested
-  if (with_bootstrap) {
-    
-    bootstrap_data <- read_rds("clean_data/plot1_data.rds") %>%
-      group_by(AGE, BIRTHYEAR_DECADES) %>% 
-      summarise(ci_lower = quantile(ratio, probs =  1-conf_level),
-                ci_upper = quantile(ratio, probs = conf_level))
-    
-    # Add confidence intervals as ribbons
-    p <- p + 
-      geom_ribbon(
-        data = bootstrap_data,
-        aes(x = AGE, ymin = ci_lower, ymax = ci_upper, fill = BIRTHYEAR_DECADES),
-        alpha = 0.2,
-        inherit.aes = FALSE
-      ) +
-      scale_fill_manual(values = figs_cohort_colors(use_grayscale), guide = "none")
-  }
   
   return(p)
 }
@@ -123,6 +144,7 @@ create_plot2 <- function(data,
                            "1970s", "1980s"),
                          start_age = 25,
                          with_bootstrap = FALSE,
+                         bootstrap_path = "bootstrap_estimates/main/fig2_bootstrapped_estimates.rds",
                          conf_level = 0.95) {
   
   if(is.null(title)) {
@@ -165,8 +187,8 @@ create_plot2 <- function(data,
   # Add confidence intervals if bootstrap is requested
   if (with_bootstrap) {
     # Generate bootstrapped data
-    bootstrap_data <- read_rds("clean_data/plot2_data.rds") %>%
-      filter(BIRTHYEAR_DECADES != "1940s") %>%
+    bootstrap_data <- read_rds(bootstrap_path) %>%
+      filter(BIRTHYEAR_DECADES %!in% c("1930s", "1940s")) %>%
       group_by(AGE, BIRTHYEAR_DECADES) %>% 
       summarise(ci_lower = quantile(ratio.change, probs =  1-conf_level),
                 ci_upper = quantile(ratio.change, probs = conf_level))
@@ -175,11 +197,12 @@ create_plot2 <- function(data,
     p <- p + 
       geom_ribbon(
         data = bootstrap_data,
-        aes(x = AGE, ymin = ci_lower, ymax = ci_upper, fill = BIRTHYEAR_DECADES),
+        aes(x = AGE, ymin = ci_lower, ymax = ci_upper, 
+            fill = BIRTHYEAR_DECADES),
         alpha = 0.2,
         inherit.aes = FALSE
       ) +
-      scale_fill_manual(values = figs_cohort_colors(use_grayscale), guide = "none")
+      scale_fill_manual(values = figs_cohort_colors(use_grayscale), guide = "none") 
   }
   
   return(p)
@@ -203,6 +226,7 @@ create_plot3 <- function(data,
                          start_age = 25,
                          scenarios_to_include = "main",
                          with_bootstrap = FALSE,
+                         bootstrap_path = "bootstrap_estimates/main/fig3_bootstrapped_estimates.rds",
                          conf_level = 0.95) {
   
   if(is.null(title)) {
@@ -228,20 +252,21 @@ create_plot3 <- function(data,
   
   # Get bootstrapped data if requested
   if (with_bootstrap) {
-     bootstrap_data <- read_rds("clean_data/plotcount_data.rds") %>%
+     bootstrap_data <- read_rds(bootstrap_path) %>%
       group_by(YEAR, key, group) %>% 
       summarise(ci_lower = quantile(value, probs =  1-conf_level),
-                ci_upper = quantile(value, probs = conf_level))
+                ci_upper = quantile(value, probs = conf_level)) %>%
+       ungroup()
      
      plot_data <- left_join(plot_data, 
                             bootstrap_data %>%
-                              filter(key %in% unique(counterfactual_result$data$key)), 
+                              filter(key %in% unique(plot_data$key)), 
                             by = c("YEAR", "key", "group"))
        
   }
   
   # Define colors and line types
-  scenario_names <- unique(plot_data$key)
+  scenario_names <- levels(plot_data$key)[unique(plot_data$key)] 
   
   scenario_colours <- if (use_grayscale) {
     c(
@@ -294,7 +319,7 @@ create_plot3 <- function(data,
     group_plot_data <- plot_data %>% 
       filter(group == !!group)
     
-    p <- group_plot_data %>%
+    p <- plot_data %>%
         ggplot(aes(
           x = YEAR, y = value, color = key, shape = key, linetype = key)) +
         geom_line() +
@@ -320,7 +345,9 @@ create_plot3 <- function(data,
         p <- p + 
           geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = key), 
                       alpha = 0.2, color = NA) +
-          scale_fill_manual(values = colors, guide = "none")
+          scale_fill_manual(name = "Scenario",
+                              values = scenario_colours,
+                              breaks = scenario_names, guide = "none") 
       }
       
       plot_list[[group]] <- p

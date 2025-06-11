@@ -7,6 +7,7 @@
 # also set the wd to the folder with these files (or change the path below).
 
 source("jobs/0-helperfunctions.R")
+library(ipumsr)
 
 ddi_monthly <- read_ipums_ddi("raw_data/cps_00021.xml")
 
