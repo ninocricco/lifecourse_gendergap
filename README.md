@@ -1,26 +1,14 @@
 # Gender Pay Gap Starting Points and Life Course Divergence
 
-This repository contains code and data for analyzing how the gender gap in pay has evolved across cohorts and over the life course, using data from the Current Population Survey (CPS). 
+This repository contains code and data for "Trends in the Gender Pay Gap: Narrowing Starting Points and Persistent Life Course Divergence", by Alexandra A. Killewald and Nino Cricco.
 
-**Author:** Nino Cricco
-
-## Project Overview
-
-This project investigates:
-1. How gender wage gaps have evolved across birth cohorts
-2. How gender wage gaps change over the life course across birth cohorts  
-3. The relative contributions of starting wage gaps versus life course divergence
+**Files maintained by:** Nino Cricco
 
 ## Data Sources
 
-The analysis uses two main CPS datasets:
+The analysis uses data from the Current Population Survey, available on IPUMS at https://cps.ipums.org/
 - **Annual Social and Economic Supplement (ASEC)**: Annual earnings data
-- **Outgoing Rotation Group (ORG)**: Monthly earnings data with detailed wage information
-
-Raw data files are obtained from IPUMS CPS and include:
-- CPS extracts with demographic and earnings variables
-- Consumer Price Index (CPI) data for inflation adjustment
-- NBER merged ORG data files
+- **Outgoing Rotation Group (ORG)**: Monthly earnings data with detailed wage information 
 
 ## Analysis Pipeline
 
@@ -30,11 +18,9 @@ Raw data files are obtained from IPUMS CPS and include:
 
 ### 2. Data Processing (1-*.R)
 - **1-producedata-asec.R**: Processes ASEC data to create analytic sample with variable recoding, filtering, and inflation adjustment
-- **1-producedata-org.R**: Processes ORG data including:
+- **1-producedata-org.R**: Processes ORG data to create analytic sample with variable recoding, filtering, and inflation adjustment. Modifications include:
   - Hours worked imputation for "hours vary" responses (post-1994)
-  - Top-coding adjustment using log-normal distribution
-  - Creation of consistent hourly wage measures
-  - Demographic variable recoding
+  - Top-coding using log-normal imputation to adjust for changes to the CPS topcode
 - **2-producedata-org-selectionweights.R**: Creates inverse probability weights to adjust for selection into the ORG sample
 
 ### 3. Analysis Functions (3-*.R)
