@@ -85,7 +85,10 @@ analytic_sample <- data_monthly %>%
          TOPCODE_FLAG = ~ as.integer(.x == max(.x, na.rm = TRUE))),
     .names = "{.col}_{.fn}"
   )) %>%
-  ungroup()
+  ungroup() %>%
+  filter(ELIGORG == 1) %>%
+  # Including only wage and salary workers who meet the criteria for ORG eligibility
+  filter(CLASSWKR %in% c(20, 21, 22, 23, 24, 25, 27, 28))
 
 #------------------------------------------------------------------------------
 # RECODING MAIN EARNINGS VARIABLES
@@ -126,7 +129,6 @@ analytic_sample <- data_monthly %>%
 # Diagnostics figure to show what % of ORG eligible respondents report 
 # "hours vary" by year and sex
 fig_diag_hrsvary <- analytic_sample %>%
-  filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
   summarise(share_hrsvary = wtd.mean(UHRSWORK1_HRSVARY_FLAG, weight = EARNWT)) %>%
   ggplot(aes(x = YEAR, y = share_hrsvary, linetype = FEMALE)) +
@@ -147,16 +149,8 @@ fig_diag_hrsvary <- analytic_sample %>%
 hrsvary_estimation <- analytic_sample %>%
   filter(UHRSWORK1_HRSVARY_FLAG != 1)
 
-# Get a sense for missingness for reasons other than "Hours vary"
-# Note: When we filter to ELIGORG eligibile respondents, there is no missingness
-# beyond hours vary, but at this stage we keep all respondents in the ORG
-# months even if they are not ORG eligible for later selection into 
-# ORG prediction models
-length(which(is.na(hrsvary_estimation$UHRSWORK1)))/dim(hrsvary_estimation)[1]
-
 # Create nested dataframes by group for men, women by reported ft/pt status
 model_hrsvary <- hrsvary_estimation %>%
-  filter(ELIGORG == 1) %>%
   group_by(FEMALE, WKSTAT_SUM) %>%
   nest() %>%
   # Fit models for each group
@@ -189,7 +183,6 @@ analytic_sample_hrsvary <- bind_rows(
 # reporting hours vary vs. imputing hours worked
 
 fig_hrsvary_pred <- analytic_sample_hrsvary %>%
-  filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
   summarise(UHRSWORK1_PRED = wtd.mean(UHRSWORK1_PRED, weight = EARNWT), 
             UHRSWORK1 = wtd.mean(UHRSWORK1, weight = EARNWT)) %>%
@@ -200,7 +193,7 @@ fig_hrsvary_pred <- analytic_sample_hrsvary %>%
   facet_wrap(~FEMALE) +
   labs(title = "Diagnostics Plot: Mean Usual Hours Worked, List-wise Deletion 
        and Imputation, CPS Outgoing Rotation Group",
-       y = "Share", x = "Year") +
+       y = "Usual Hours Worked per Week", x = "Year") +
   theme(legend.position = "bottom", 
         plot.title = element_text(hjust = .5),
         legend.title = element_blank()) +
@@ -218,7 +211,6 @@ ggsave("figures/draft_paper/diagnostic_plots/hoursvary.pdf",
 
 # Diagnostic plot, share of workers reporting weekly earnings above the topcode
 fig_diag_topcode <- analytic_sample_hrsvary %>%
-  filter(ELIGORG == 1) %>%
   group_by(FEMALE, YEAR) %>%
   summarise(
     SHARE_TOPCODED_EARNWEEK = wtd.mean(
@@ -241,13 +233,14 @@ fig_diag_topcode <- analytic_sample_hrsvary %>%
   geom_vline(xintercept = 2023, color = "red", linetype = "dashed")
 
 analytic_sample_recoded_topcode <- analytic_sample_hrsvary %>% 
+  filter(ELIGORG == 1) %>%
   group_by(YEAR, MISH) %>%
   mutate(
     # For EARNWEEK
     mu1 = ifelse(EARNWEEK_TOPCODE_FLAG == 1,
-                 mean(log(EARNWEEK), na.rm = TRUE), NA_real_),
+                 mean(log(EARNWEEK + 5), na.rm = TRUE), NA_real_),
     sd1 = ifelse(EARNWEEK_TOPCODE_FLAG == 1,
-                 sd(log(EARNWEEK),  na.rm = TRUE), NA_real_),
+                 sd(log(EARNWEEK + 5),  na.rm = TRUE), NA_real_),
     lt1 = log(EARNWEEK_TOPCODE),
     t1_1 = exp(mu1 + sd1^2 / 2),
     t2_1 = 1 - pnorm((lt1 - mu1 - sd1^2) / sd1),
@@ -256,9 +249,9 @@ analytic_sample_recoded_topcode <- analytic_sample_hrsvary %>%
                        t1_1 * t2_1 / t3_1, EARNWEEK),
     # SAME PROCESS FOR EARNWEEK2
     mu2 = ifelse(EARNWEEK2_TOPCODE_FLAG == 1,
-                 mean(log(EARNWEEK2), na.rm = TRUE), NA_real_),
+                 mean(log(EARNWEEK2+ 5), na.rm = TRUE), NA_real_),
     sd2 = ifelse(EARNWEEK2_TOPCODE_FLAG == 1,
-                 sd(log(EARNWEEK2),  na.rm = TRUE), NA_real_),
+                 sd(log(EARNWEEK2+ 5),  na.rm = TRUE), NA_real_),
     lt2 = log(EARNWEEK2_TOPCODE),
     t1_2 = exp(mu2 + sd2^2 / 2),
     t2_2 = 1 - pnorm((lt2 - mu2 - sd2^2) / sd2),
@@ -274,10 +267,10 @@ analytic_sample_recoded_topcode <- analytic_sample_hrsvary %>%
 
 # Diagnostic plot, mean earnings w/topcode vs. adjusting topcode
 fig_mean_earnings_topcode_adj <- analytic_sample_recoded_topcode %>%
-  filter(ELIGORG == 1) %>%
+  filter(ELIGORG == 1, EARNWEEK2 > 0, EARNWEEK > 0) %>%
   group_by(FEMALE, YEAR) %>%
   summarise(EARNWEEK2_TC = wtd.mean(EARNWEEK2_TC, weight = EARNWT), 
-            EARNWEEK2 = wtd.mean(EARNWEEK2, weight = EARNWT)) %>%
+            EARNWEEK2 = wtd.mean(EARNWEEK_TC, weight = EARNWT)) %>%
   gather(KEY, VALUE, -c(FEMALE, YEAR)) %>%
   ggplot(aes(x = YEAR, y = VALUE, linetype = KEY)) +
   geom_line() +
@@ -384,16 +377,9 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                                        BIRTHYEAR %in% c(1987:1996) ~ "1987-1996"
          ))
 
-# Writing out clean analytic data files, both all monthly + only ORG eligible
-analytic_sample_org_elig <- analytic_sample_org %>%
-  filter(ELIGORG == 1) %>%
-  # Including only wage and salary workers who meet the criteria for ORG eligibility
-  filter(CLASSWKR %in% c(20, 21, 22, 23, 24, 25, 27, 28))
 
-write_rds(analytic_sample_org, "clean_data/analytic_sample_org_all.rds")
-write_rds(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.rds")
-write_csv(analytic_sample_org, "clean_data/analytic_sample_org_all.csv")
-write_csv(analytic_sample_org_elig, "clean_data/analytic_sample_org_elig.csv")
+write_rds(analytic_sample_org, "clean_data/analytic_sample_org.rds")
+write_csv(analytic_sample_org, "clean_data/analytic_sample_org.csv")
 
 #------------------------------------------------------------------------------
 
