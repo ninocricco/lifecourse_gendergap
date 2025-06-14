@@ -3,19 +3,21 @@
 # FILE: GENERATING ORG ANALYTIC SAMPLE FROM RAW IPUMS DATA
 # AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
-# NOTE: To load data, you must download both the extract's data and the DDI and 
-# also set the wd to the folder with these files (or change the path below).
 
+#------------------------------------------------------------------------------
 source("jobs/0-helperfunctions.R")
-
 #------------------------------------------------------------------------------
 # READ IN RAW DATA
 #------------------------------------------------------------------------------
 # DDI codebook to read in raw IPUMS data
+
+# To load data, you must download both the extract and DDI from IPUMS
+# also set the wd to the folder with these files (or change the path below).
+
 ddi_monthly <- ipumsr::read_ipums_ddi("raw_data/cps_00023.xml")
 
 data_monthly <- ipumsr::read_ipums_micro(
-  ddi_monthly, 
+  ddi_monthly,
   vars = c(
     "YEAR", # Survey Year
     "MISH", # Month in CPS sample, used to identify ORG interview months 
@@ -61,13 +63,14 @@ analytic_sample <- data_monthly %>%
   # Merging in CPI inflation adjustment 
   left_join(., cpi99, by = c("YEAR" = "year")) %>%
   mutate(
+    # Estimating Birth Cohort using survey year & age- Rs could also belong to prior BC 
     BIRTHYEAR = YEAR-AGE, 
     FEMALE = ifelse(SEX == 2, "Women", "Men"),
     EDUC = ifelse(EDUC == 999, NA, EDUC),
     EDUC2 = ifelse(EDUC >= 110, "BA+", "<BA"),
     HOURWAGE2 = na_codes(HOURWAGE2, 999.99),
     EARNWEEK2 = na_codes(EARNWEEK2, 999999.99), 
-    EARNWEEK2_0_FLAG = ifelse(
+    EARNWEEK2_0_FLAG = ifelse( # Flagging Rs who report 0 weekly earnings
       complete.cases(EARNWEEK2) & EARNWEEK2 == 0, TRUE, FALSE), 
     UHRSWORKORG = na_codes(UHRSWORKORG, c(998, 999)), 
     UHRSWORK1_HRSVARY_FLAG = ifelse(UHRSWORK1 == 997, TRUE, FALSE), # Indicator for whether R reported hours vary
@@ -76,63 +79,61 @@ analytic_sample <- data_monthly %>%
                            WKSTAT %in% c(20:42) ~ "pt", 
                            WKSTAT %in% c(50, 60)~ "unemp"), 
     EARNWT = EARNWT/12,
-    RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "Latino",
-                        RACE == 200 ~ "Black",
+    # We use Race and Hispanic/Latino origin/descent to code for Race/Ethnicity
+    # Starting in 2003, CPS allowed Rs to select more than 1 Race, expanding the number of codes
+    # We code Rs who report >1 Race, and who do not report being Black, White, or Latino as "Other"
+    RACEETH = case_when(HISPAN %!in% c(0, 901, 902) ~ "Latino", 
+                        RACE == 200 ~ "Black", 
                         RACE == 100 ~ "White",
                         TRUE ~ "Other"), 
+    # We use marital status and nativity only to predict hours among Rs reporting hours vary (more below)
     MARRIED = case_when(MARST %in% c(1,2) ~ "married", 
                         MARST == 6 ~ "never.married", 
                         TRUE ~ "prev.married"), 
-    FBORN = factor(ifelse(NATIVITY == 5, 1, 0)),
-    EST_EARNWEEK2_HRLYWORKERS = ifelse( # Estimating weekly hours among unpaid workers- this is the value the top-code is based on 
-      PAIDHOUR == 2, HOURWAGE2*UHRSWORK1, NA)) %>%
-  # Identifying top-code values by year
+    FBORN = factor(ifelse(NATIVITY == 5, 1, 0))) %>%
+  # Identifying EARNWEEK top-code values by year (and Month of Interview, given later dynamic topcodes)
+  # More information on CPS top-coding procedures and how we handle them in sections below
   group_by(YEAR, MISH) %>%
   mutate(across(
-    c(EARNWEEK2, EST_EARNWEEK2_HRLYWORKERS, HOURWAGE2),
+    c(EARNWEEK2),
     list(TOPCODE = ~ max(.x, na.rm = TRUE),
          TOPCODE_FLAG = ~ as.integer(.x == max(.x, na.rm = TRUE))),
     .names = "{.col}_{.fn}"
   )) %>%
   ungroup() %>%
+  # Select only respondents who report being ORG-eligible, based on being a wage/salary worker Age 15+ in an ORG(MISH 4 and 8)
   filter(ELIGORG == 1) %>%
   # Including only wage and salary workers who meet the criteria for ORG eligibility
+  # IPUMS recommends users impose CPS eligibility criteria in addition to just using the ELIGORG flag 
+  # see documentation here: https://cps.ipums.org/cps-action/variables/UHRSWORKORG#comparability_section
   filter(CLASSWKR %in% c(20, 21, 22, 23, 24, 25, 27, 28)) %>%
-  filter(EARNWEEK2_0_FLAG == F)
+  filter(EARNWEEK2_0_FLAG == F) # We exclude Rs who report zero earnings
 
 #------------------------------------------------------------------------------
 # RECODING MAIN EARNINGS VARIABLES
 #------------------------------------------------------------------------------
-
-# I think we need some more commentary, drawing from the Schmitt paper,
-# about why we’re doing what we’re doing. At the start of this section of code, 
-# we could note that we follow the guidance in Schmitt and include the link 
-# (you already have the link at line 106). We could also include this overall quote: 
-# “The analysis here suggests that the a [sic] consistent and robust hourly wage series for the full
-#1979-2002 period: (1) uses a log-normal imputation to adjust for top-coding; (2) excludes data
-#below $1 and above $100 per hour (in constant 2002 dollars); (3) excludes overtime, tip, and
-#commission earnings for hourly paid workers; and (4) uses a simple procedure to impute usual
-#weekly hours for those who report their "hours vary" after 1994 (though the effects of not doing
-# this are likely to be minor). For the period 1994-2002, the best hourly wage series follows the
-# same procedure, but includes overtime, tips, and commissions for workers that report their
-# earnings by the hour.” I have some more detailed comments below
-
-# From IPUMS documentation
-# https://cps.ipums.org/cps-action/variables/EARNWEEK#description_section
-# Interviewers asked directly about total weekly earnings and also collected 
-# information about the usual number of hours worked per week and the hourly 
-# rate of pay at the current job. The figure given in EARNWEEK is the higher of 
-# the values derived from these two sources:
-#   1) the respondent's answer to the question, "How much do you usually earn
-#   per week at this job before deductions?" or 
-#   2) for workers paid by the hour (and coded as "2" in PAIDHOUR), the 
-#   reported number of hours the respondent usually worked at the job,
-#   multiplied by the hourly wage rate given in HOURWAGE.
+# KEY NOTES:
+#   - Prior research notes important challenges that come with estimating 
+#   consistent hourly wage series using the ORG due to the design of the CPS 
+#   and changes to those designs (see Schmitt 2003, linked below): 
+#     https://ceprdata.s3.amazonaws.com/data/cps/CEPR_ORG_Wages.pdf
+#   We follow the best practices outlined in this paper, which include
+#   1) Imputing weekly hours for Rs reporting "hours vary" starting in 1994
+#     using a regression-based imputation procedure
+#   2) Estimating mean earnings above top-code values, which change in 1989, 
+#     1994, 1998, and 2023 using a log-normal imputation
+#   3) Using the hourly wage series that excludes overtime, tip, and commission
+#     earnings for Rs paid hourly 
+#   - Our results to these different specifications of the hourly wage series, 
+#   as we show in the appendix. Since our interest is in trends that precede
+#   1994, we exclude tips, overtime, and commissions by using just hourly 
+#   wages for Rs who report being paid hourly, and weekly earnigns (which 
+#   include tips, commision, and overtime) for Rs reporting weekly earnings
+#   - For more details, see the IPUMS documentation here:
+#     https://cps.ipums.org/cps-action/variables/EARNWEEK#description_section
 #------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
-# IMPUTING HOURS WORKED FOR RESPONDENTS WHO REPORT HOURS VARY AFTER 
-# 1994 CPS QUESTIONNAIRE REDESIGN
+# IMPUTING HOURS WORKED FOR RESPONDENTS WHO REPORT HOURS VARY AFTER 1994
 #------------------------------------------------------------------------------
 # KEY NOTES: 
 #   -There are a small number of Rs (1034, .02% of the overall sample) who 
@@ -140,13 +141,11 @@ analytic_sample <- data_monthly %>%
 #   their wages hourly. For these Rs, we technically don't use their hours to 
 #   compute their hourly wage for our primary specification, which uses just the
 #   hourly wage, so in theory we could include them. When we include tips,
-#   overtime, and commissions, though, we do use their hours. 
-#   For comparability across specifications, we drop these individuals from the
-#   sample in this section
+#   overtime, and commissions, though, we do use their hours. For comparability 
+#   across these different specifications, we drop these individuals from the
+#   sample in this section in line 204: (filter(UHRSWORK1_PRED_0_FLAG == F))
 #------------------------------------------------------------------------------
-
-# Diagnostics figure to show what % of ORG eligible respondents report 
-# "hours vary" by year and sex
+# Diagnostics figure to show what % of Rs report "hrs vary" by year & sex 
 fig_diag_hrsvary <- analytic_sample %>%
   group_by(FEMALE, YEAR) %>%
   summarise(share_hrsvary = wtd.mean(UHRSWORK1_HRSVARY_FLAG, weight = EARNWT)) %>%
@@ -161,11 +160,13 @@ fig_diag_hrsvary <- analytic_sample %>%
         legend.title = element_blank()) +
   geom_vline(xintercept = 1994, color = "red", linetype = "dashed")
 
-# Among those with UHRSWORK1_HRSVARY_FLAG == 0, 
-# fit separate models by FEMALE and WKSTAT_SUM predicting UHRSWORK1 
-# as a function of age, race, education, marital status, and nativity
+# To estimate UHRSWORK1 among those reporting hours vary, we regress UHRSWORK1
+# on Age, Race, Education, Marital Status, and Nativity separately by Sex and 
+# full-time/part time status among those who do not report hours vary, then 
+# impute UHRSWORK1 with  the predicted values from this regression on those 
+# who do report hours vary 
 
-# First split data into estimation and prediction samples
+# Use Hours vary flag to select those who do not report hours vary
 hrsvary_estimation <- analytic_sample %>%
   filter(UHRSWORK1_HRSVARY_FLAG != 1)
 
@@ -173,25 +174,23 @@ hrsvary_estimation <- analytic_sample %>%
 model_hrsvary <- hrsvary_estimation %>%
   group_by(FEMALE, WKSTAT_SUM) %>%
   nest() %>%
-  # Fit models for each group
+  # Fit regression model for each sex * work status group
   mutate(
     model = map(
       data, ~ lm(UHRSWORK1 ~ AGE + RACEETH + MARRIED + FBORN + EDUC, data = .x))
   )
 
-# For workers who report hours vary, generate predicted hours
+# Generate predicted hours among Rs who report hours vary using these models
 hrsvary_data <- analytic_sample %>%
-  filter(UHRSWORK1_HRSVARY_FLAG == 1) %>%
-  group_by(FEMALE, WKSTAT_SUM) %>%
+  filter(UHRSWORK1_HRSVARY_FLAG == 1) %>% # Selects Rs who report hours vary
+  group_by(FEMALE, WKSTAT_SUM) %>% # Nests by sex * work status group
   nest() %>%
-  # Join with model data to get appropriate models
+  # Join with model data
   left_join(model_hrsvary %>% select(-data), by = c("FEMALE", "WKSTAT_SUM")) %>%
   # Generate predictions
-  mutate(predictions = map2(model, data, predict)) %>%
-  select(-model) %>%
-  unnest(cols = c(data, predictions))
+  mutate(predictions = map2(model, data, predict)) 
 
-# Combine dataframes, workers reporting hours + workers reporting hours vary
+# Combine the two dataframes for Rs reporting hours + Rs reporting hours vary
 analytic_sample_hrsvary <- bind_rows(
   hrsvary_estimation %>% mutate(UHRSWORK1_PRED = UHRSWORK1),
   hrsvary_data %>% mutate(UHRSWORK1_PRED = predictions)) %>%
@@ -204,7 +203,7 @@ analytic_sample_hrsvary <- bind_rows(
   # Dropping individuals reporting zero usual hours worked (see note above)
   filter(UHRSWORK1_PRED_0_FLAG == F)
  
-# Diagnostic plot comparing mean hours worked with list-wise deletion of workers
+# Diagnostic plot comparing mean hours worked with list-wise deletion of Rs
 # reporting hours vary vs. imputing hours worked
 fig_hrsvary_pred <- analytic_sample_hrsvary %>%
   group_by(FEMALE, YEAR) %>%
@@ -231,8 +230,16 @@ ggsave("figures/draft_paper/diagnostic_plots_13.06.25/hoursvary.pdf",
 # ESTIMATING MEAN WAGES ABOVE THE TOP-CODE
 #------------------------------------------------------------------------------
 # KEY NOTES:
-#   - Procedure to adjust for changes in top-coding using log-normal 
-#   distribution to estimate mean and variance above the topcode 
+#   - The CPS changed their top-coding rules through our series in  1989, 1998, 
+#   and 2023. While a small percentage of Rs are top-coded after each change, 
+#   the % of people top-coded grows year-to-year, prompting adjustments (see 
+#   diagnostic plots below). To adjust for these changes in top-coding, we 
+#   estimate the mean above the top-code in each year and assign that mean to
+#   all top-coded R's. To estimate this mean, we follow the procedure outlined
+#   in Schmitt (2003), which assumes that weekly earnings data are log-normally
+#   distributed. We first model the distribution of earnings as log-normal and
+#   estimate the mean of the distribution above the top-code conditional on
+#   the log-normal parameters estimated from the uncensored data. 
 #------------------------------------------------------------------------------
 # Diagnostic plot, share of workers reporting weekly earnings above the topcode
 fig_diag_topcode <- analytic_sample_hrsvary %>%
@@ -257,21 +264,22 @@ fig_diag_topcode <- analytic_sample_hrsvary %>%
   geom_vline(xintercept = 2023, color = "red", linetype = "dashed")
 
 analytic_sample_recoded_topcode <- analytic_sample_hrsvary %>% 
-  group_by(YEAR, MISH) %>%
+  group_by(YEAR, MISH) %>% # Computes estimates for each year/ORG month (top code values change by month in later years)
   mutate(
-    mu = ifelse(EARNWEEK2_TOPCODE_FLAG == 1,
+    mu = ifelse(EARNWEEK2_TOPCODE_FLAG == 1, # Estimates mean of full log-normal earnings distribution
                 mean(log(EARNWEEK2), na.rm = TRUE), NA_real_),
     sd = ifelse(EARNWEEK2_TOPCODE_FLAG == 1,
-                 sd(log(EARNWEEK2),  na.rm = TRUE), NA_real_),
-    lt = log(EARNWEEK2_TOPCODE),
-    t1 = exp(mu + sd^2 / 2),
-    t2 = 1 - pnorm((lt - mu - sd^2) / sd),
-    t3 = 1 - pnorm((lt - mu) / sd),
+                 sd(log(EARNWEEK2),  na.rm = TRUE), NA_real_), # Estimates sd of full log-normal earnings distribution
+    lt = log(EARNWEEK2_TOPCODE), # Takes the log of the threshold
+    t1 = exp(mu + sd^2 / 2), # Uses parameters from uncensored data to estimate mean of the uncensored distribution
+    t2 = 1 - pnorm((lt - mu - sd^2) / sd), # Estimates probability mass above the threshold with parameters
+    t3 = 1 - pnorm((lt - mu) / sd), # Observed probability mass above the threshold
     EARNWEEK2_TC = ifelse(
-      EARNWEEK2_TOPCODE_FLAG == 1, t1 * t2 / t3, EARNWEEK2)
+      EARNWEEK2_TOPCODE_FLAG == 1, t1 * t2 / t3, # Integrates across the tail of the lognormal
+      EARNWEEK2)
     ) %>% 
   ungroup() %>% 
-  select(-c(mu, sd, lt, t1, t2, t3))
+  select(-c(mu, sd, lt, t1, t2, t3)) # Drops these ancillary variables
 
 # Diagnostic plot, mean earnings w/topcode vs. adjusting topcode
 fig_mean_earnings_topcode_adj <- analytic_sample_recoded_topcode %>%
@@ -299,23 +307,16 @@ ggsave("figures/draft_paper/diagnostic_plots_13.06.25/topcode.pdf",
        grid.arrange(fig_diag_topcode, fig_mean_earnings_topcode_adj, ncol = 1),
        width = 8, height = 8, dpi = 500, units = "in")
 
-# For the period 1979-2002, the most consistent and
-# robust hourly wage series:  (2) excludes
-# data below $1 and above $100 per hour (in constant 2002 dollars); (3) excludes overtime, tip,
-# and commission earnings for hourly paid workers; and (4) uses a simple procedure to impute
-# usual weekly hours for those who report their "hours vary" after 1994. For the period 1994-2002,
-# the best hourly wage series follows the same procedure, but includes overtime, tips, and
-# commissions for workers that report their earnings by the hour.
-
 analytic_sample_org <- analytic_sample_recoded_topcode %>%
   mutate(
-    # Raw IPUMS values with NA recoding
-    HOURWAGE2_RAW = HOURWAGE2,
-    EARNWEEK2_RAW = EARNWEEK2,
-    # CPI- adjusted values
+    # Create different variables for different earnings series
+    HOURWAGE2_RAW = HOURWAGE2, # raw IPUMS variables
+    EARNWEEK2_RAW = EARNWEEK2,# raw IPUMS variables
+    # Adding IPUMS adjustment factor to convert to 2023 dollars
+    # from here: https://cps.ipums.org/cps/cpi99.shtml
     HOURWAGE2 = HOURWAGE2 * cpi1999 * 1.829, 
     EARNWEEK2 = EARNWEEK2 * cpi1999 * 1.829,
-    # Top-coded 
+    # Adjusts EARNWEEK w/ estimated top-code adjustment to 2023 dollars
     EARNWEEK2_TC = EARNWEEK2_TC * cpi1999 * 1.829,
     # Using Wage for hourly workers, Weekly Earnings/ Usual Weekly hours for rest
     # Note: this variable excludes tips, overtime, and commissions for hourly workers,
@@ -360,21 +361,16 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                                        BIRTHYEAR %in% c(1987:1996) ~ "1987-1996"
          ))
 
-analytic_sample_org %>%
-  filter(PAIDHOUR == 2) %>%
-  mutate(test = ifelse(HOURWAGE2 > EARNHRLY2_INCTIPS_TC_HRSPRED, 1, 0)) %>%
-  tabyl(YEAR, test)
-
-
+#------------------------------------------------------------------------------
+# WRITING ANALYTIC SAMPLE TO THE CLEAN DATA DIRECTORY
+#------------------------------------------------------------------------------
 write_rds(analytic_sample_org, "clean_data/analytic_sample_org.rds")
 write_csv(analytic_sample_org, "clean_data/analytic_sample_org.csv")
 
 #------------------------------------------------------------------------------
 # ADDITIONAL DIAGNOSTIC PLOTS
 #------------------------------------------------------------------------------
-
 # Diagnostic plot, mean wages at age 25 with different wage measures
-
 means_cohorts_25 <- analytic_sample_org %>%
   filter(ELIGORG == 1) %>% filter(AGE == 25) %>% 
   group_by(BIRTHYEAR, FEMALE, YEAR) %>% 
@@ -398,7 +394,6 @@ ggsave("figures/draft_paper/diagnostic_plots_13.06.25/means_25_wagemeasures.pdf"
        width = 8, height = 8, dpi = 500, units = "in")
 
 # Diagnostic table and plot, share reporting earnings weekly/hourly
-
 table_reporting_wages_type_pct <- analytic_sample_org %>%
   filter(FEMALE == "Women", EARNHRLY_FLAG != "None") %>%
   tabyl(YEAR, EARNHRLY_FLAG) %>%
@@ -428,7 +423,6 @@ reporting_wages_pct <- table_reporting_wages_type_pct %>%
   guides(linetype = guide_legend(""))
 
 # Diagnostic plot, mean wages among those reporting earnings weekly/hourly
-
 reporting_wages_means  <- analytic_sample_org %>%
   filter(EARNHRLY_FLAG != "None") %>%
   group_by(YEAR, FEMALE, EARNHRLY_FLAG) %>%
