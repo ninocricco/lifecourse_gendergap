@@ -3,8 +3,6 @@
 # FILE: GENERATING ORG ANALYTIC SAMPLE FROM RAW IPUMS DATA
 # AUTHOR: NINO CRICCO
 #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 source("jobs/0-helperfunctions.R")
 #------------------------------------------------------------------------------
 # READ IN RAW DATA
@@ -72,7 +70,6 @@ analytic_sample <- data_monthly %>%
     EARNWEEK2 = na_codes(EARNWEEK2, 999999.99), 
     EARNWEEK2_0_FLAG = ifelse( # Flagging Rs who report 0 weekly earnings
       complete.cases(EARNWEEK2) & EARNWEEK2 == 0, TRUE, FALSE), 
-    UHRSWORKORG = na_codes(UHRSWORKORG, c(998, 999)), 
     UHRSWORK1_HRSVARY_FLAG = ifelse(UHRSWORK1 == 997, TRUE, FALSE), # Indicator for whether R reported hours vary
     UHRSWORK1 = na_codes(UHRSWORK1, 999, 997),
     WKSTAT_SUM = case_when(WKSTAT %in% c(10:15) ~ "ft", 
