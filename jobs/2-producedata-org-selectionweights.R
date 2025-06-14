@@ -133,7 +133,7 @@ means.age.bc_yr_sel <- org_w_selection %>%
                                         weight = ELIGORG_PRED_REFCOHORT_WEIGHT),
             MEAN.OUTCOME = wtd.mean(OUTCOME, 
                                     weight = WEIGHT),
-            n = n())
+            n = sum(WEIGHT))
 
 means.age.bc_yr_sel <- means.age.bc_yr_sel %>%
   # Computes and merges column calculating total # of women in sample by year
@@ -192,3 +192,4 @@ ggsave(
   height = 8,
   dpi = 500
 )
+

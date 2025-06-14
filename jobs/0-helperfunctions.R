@@ -9,44 +9,48 @@ source("jobs/0-libraries.r")
 # DATA PREP FUNCTIONS
 #------------------------------------------------------------------------------
 
+# Custom inverse of the built in %in% operator, checks if element is NOT in a set
 '%!in%' <- function(x,y)!('%in%'(x,y))
 
+# Assigns elements in that are %in% a set of NA codes to missing
 na_codes <- function(x, ...) {
   x[x %in% c(...)] <- NA
   x
 }
 
+# Given a string, extracts first number in the string
 numextract <- function(string){ 
-  stringr::str_extract(string, "\\-*\\d+\\.*\\d*")
+  stringr::str_extract(string, "\\-*\\d+(\\.\\d+)?*")
 } 
 
 #------------------------------------------------------------------------------
 # VISUALIZATION THEME AND COLOR PALETTE FUNCTIONS
 #------------------------------------------------------------------------------
 
+# Selects colors from a palette
 viridis = magma(7, alpha = 1, begin = 0, end = .9, direction = 1)
 
-# Function to get decades cohort colors
+# Function to assign cohort decades to color schemes, using colors or grayscale
 figs_cohort_colors <- function(use_grayscale = TRUE) {
   if(use_grayscale) {
     return(c(
-    "1930s" = "grey80",
-    "1940s" = "grey66",
-    "1950s" = "grey52",
-    "1960s" = "grey38",
-    "1970s" = "grey24",
-    "1980s" = "grey10",
-    "1990-1998" = "grey1"
+      "1927-1936" = "grey80",
+      "1937-1946"= "grey66",
+      "1947-1956" = "grey52",
+      "1957-1966" = "grey38",
+      "1967-1976" = "grey24",
+      "1977-1986" = "grey10",
+      "1987-1996" = "grey1"
   ))
   } else {
     return(c(
-      "1930s" = viridis[7],
-      "1940s" = viridis[6],
-      "1950s" = viridis[5],
-      "1960s" = viridis[4],
-      "1970s" = viridis[3],
-      "1980s" = viridis[2],
-      "1990-1998" = viridis[1]
+      "1927-1936" = viridis[7],
+      "1937-1946"= viridis[6],
+      "1947-1956" = viridis[5],
+      "1957-1966" = viridis[4],
+      "1967-1976" = viridis[3],
+      "1977-1986" = viridis[2],
+      "1987-1996" = viridis[1]
     ))
   }
 }
@@ -85,7 +89,7 @@ create_common_theme <- function(base_size = 14, legend_position = "none") {
     )
 }
 
-# Helper function to extract legend from a ggplot
+# Extracts legend from a ggplot
 g_legend <- function(a.gplot) {
   tmp <- ggplot_gtable(ggplot_build(a.gplot))
   leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
@@ -93,7 +97,7 @@ g_legend <- function(a.gplot) {
   return(legend)
 }
 
-# Helper function to create standard caption
+# Creates a caption that varies by data source
 create_caption <- function(data_source_label, additional_text = NULL) {
   caption <- sprintf(
     "Data from the Current Population Survey %s", data_source_label)
@@ -103,4 +107,5 @@ create_caption <- function(data_source_label, additional_text = NULL) {
   return(caption)
 }
 
+# Setting the base font size for all plots
 base_size = 14

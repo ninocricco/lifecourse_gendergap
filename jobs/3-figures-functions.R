@@ -22,8 +22,8 @@ create_plot1 <- function(data,
                          base_size = 14, 
                          legend.position = "none",
                          decades_to_include = c(
-                           "1930s", "1940s", "1950s", "1960s", 
-                           "1970s", "1980s", "1990-1998"),
+                           "1927-1936", "1937-1946", "1947-1956", "1957-1966",
+                           "1967-1976", "1977-1986", "1987-1996"),
                          with_bootstrap = FALSE,
                          bootstrap_path = "bootstrap_estimates/main/fig1_bootstrapped_estimates.rds",
                          conf_level = 0.95) {
@@ -140,8 +140,9 @@ create_plot2 <- function(data,
                          caption = NULL,
                          base_size = 14,
                          data_source_label = "Outgoing Rotation Group", 
-                         decades_to_include = c("1950s", "1960s", 
-                           "1970s", "1980s"),
+                         decades_to_include = c(
+                           "1927-1936", "1937-1946", "1947-1956", "1957-1966",
+                           "1967-1976", "1977-1986", "1987-1996"),
                          start_age = 25,
                          with_bootstrap = FALSE,
                          bootstrap_path = "bootstrap_estimates/main/fig2_bootstrapped_estimates.rds",
@@ -166,7 +167,7 @@ create_plot2 <- function(data,
     geom_line() +
     create_common_theme(base_size, "right") +
     theme(
-      legend.position      = c(0.9, 0.3), 
+      legend.position      = c(0.9, 0.9), 
       legend.justification = c("right", "top"),
       legend.direction     = "vertical",
       legend.background    = element_rect(fill = alpha("white", .8), colour = NA)
@@ -180,7 +181,6 @@ create_plot2 <- function(data,
                  start_age, sumstat_label, outcome_label), 
       title = title,
       caption = caption) +
-    ylim(-20, 2) +
     xlim(start_age, 55) + 
     geom_hline(yintercept = 0, linetype = "dashed")
   
@@ -224,7 +224,7 @@ create_plot3 <- function(data,
                          data_source_label = "Outgoing Rotation Group",
                          refcohort = 1957,
                          start_age = 25,
-                         scenarios_to_include = "main",
+                         scenarios_to_include = "appendix",
                          with_bootstrap = FALSE,
                          bootstrap_path = "bootstrap_estimates/main/fig3_bootstrapped_estimates.rds",
                          conf_level = 0.95) {

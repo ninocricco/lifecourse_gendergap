@@ -20,9 +20,7 @@ suppressPackageStartupMessages({
   source("jobs/3-data-prep-functions.R")
 })
 
-org <- read_rds("clean_data/analytic_sample_org_elig_weights.rds") %>%
-  mutate(UHRSWORK1_PRED = as.numeric(zap_labels(UHRSWORK1_PRED))) %>%
-  filter(UHRSWORK1_PRED > 0)
+org <- read_rds("clean_data/analytic_sample_org.rds")
 
 group_vars <- c("AGE", "YEAR", "FEMALE")
 
@@ -41,14 +39,15 @@ do_one <- function(i) {
     ungroup()
   
   # Process data for different plots
-  data_descplot <- gen_outcome_sumstats(bootstrap_sample, use_birth_group = "BIRTHYEAR_DECADES")
-  data_restplot <- gen_outcome_sumstats(bootstrap_sample)
+  data_descplot <- gen_outcome_sumstats(
+    bootstrap_sample, use_birth_group = "BIRTHYEAR_DECADES")
+  data_restplot <- gen_outcome_sumstats(
+    bootstrap_sample)
   
   list(
     plot1_data <- prepare_plot1_data(data_descplot),
     plot2_data <- prepare_plot2_data(data_descplot),
-    plotcount_data<- prepare_counterfactual_data(data_restplot, 
-                                                 scenarios_to_include = "appendix")$data
+    plotcount_data<- prepare_counterfactual_data(data_restplot)$data
   )
 }
 

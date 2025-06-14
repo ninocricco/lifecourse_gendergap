@@ -11,7 +11,7 @@ source("jobs/0-helperfunctions.R")
 #------------------------------------------------------------------------------
 
 gen_outcome_sumstats <- function(data,
-                                 outcome_var = "EARNHRLY_MAIN",
+                                 outcome_var = "EARNHRLY2_EXCTIPS_TC_HRSPRED",
                                  weight_var = "EARNWT",
                                  sumstat = "mean",
                                  probs = 0.5,
@@ -57,21 +57,25 @@ gen_outcome_sumstats <- function(data,
   # Calculate summary statistics
   sumstats <- data %>%
     ungroup() %>%
-    add_count(FEMALE, YEAR, !!sym(group_var), name = "n_year") %>% 
+    group_by(FEMALE, YEAR) %>%
+    mutate(n_year = sum(!!sym(weight_var))) %>% 
+    ungroup() %>%
     group_by(across(all_of(group_cols))) %>%
     summarise(MEAN.OUTCOME = summary_func(MEAN.OUTCOME, !!sym(weight_var)),
-              n = n(), 
+              n = sum(!!sym(weight_var)), 
               n_year = first(n_year),
               .groups = "drop"
     )
   }
-  else if(is.null(group_var)){
+  else {
     sumstats <- data %>%
       ungroup() %>%
-      add_count(FEMALE, YEAR, name = "n_year") %>% 
+      group_by(FEMALE, YEAR) %>%
+      mutate(n_year = sum(!!sym(weight_var))) %>%
+      ungroup() %>%
       group_by(across(all_of(group_cols))) %>%
       summarise(MEAN.OUTCOME = summary_func(MEAN.OUTCOME, !!sym(weight_var)),
-                n = n(), 
+                n = sum(!!sym(weight_var)), 
                 n_year = first(n_year),
                 .groups = "drop"
       )
@@ -85,16 +89,21 @@ gen_outcome_sumstats <- function(data,
 #------------------------------------------------------------------------------
 
 prepare_plot1_data <- function(data, decades_to_include = c(
-  "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
+  "1927-1936", "1937-1946", "1947-1956", "1957-1966", "1967-1976",
+  "1977-1986", "1987-1996")) {
   
   transformed_data <- data %>%
     select(AGE, BIRTHYEAR_DECADES, FEMALE, MEAN.OUTCOME) %>% 
     filter(complete.cases(BIRTHYEAR_DECADES)) %>%
-    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 45 ~ 1,
-                            BIRTHYEAR_DECADES == "1980s" & AGE > 35 ~ 1,
-                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 25 ~ 1,
+    mutate(drop = case_when(BIRTHYEAR_DECADES == "1927-1936" & AGE < 55 ~ 1,
+                            BIRTHYEAR_DECADES == "1937-1946" & AGE < 45 ~ 1,
+                            BIRTHYEAR_DECADES == "1947-1956" & AGE < 35 ~ 1,
+                            BIRTHYEAR_DECADES == "1957-1966" ~ 0,
+                            BIRTHYEAR_DECADES == "1967-1976" & AGE > 47 ~ 1,
+                            BIRTHYEAR_DECADES == "1977-1986" & AGE > 37 ~ 1,
+                            BIRTHYEAR_DECADES == "1987-1996" & AGE > 27 ~ 1,
                             TRUE ~ 0)) %>%
-    filter(drop == 0, AGE < 55) %>%
+    filter(drop == 0) %>%
     pivot_wider(names_from = FEMALE, values_from = MEAN.OUTCOME) %>% 
     mutate(ratio = Women/Men) %>%
     filter(BIRTHYEAR_DECADES %in% decades_to_include)
@@ -107,16 +116,21 @@ prepare_plot1_data <- function(data, decades_to_include = c(
 #------------------------------------------------------------------------------
 
 prepare_plot2_data <- function(data, start_age = 25, decades_to_include = c(
-  "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990-1998")) {
+  "1927-1936", "1937-1946", "1947-1956", "1957-1966", "1967-1976",
+  "1977-1986", "1987-1996")) {
   
   transformed_data <- data %>%
     select(AGE, BIRTHYEAR_DECADES, FEMALE, MEAN.OUTCOME) %>%
     filter(complete.cases(BIRTHYEAR_DECADES)) %>%
-    mutate(drop = case_when(BIRTHYEAR_DECADES == "1970s" & AGE > 45 ~ 1,
-                            BIRTHYEAR_DECADES == "1980s" & AGE > 35 ~ 1,
-                            BIRTHYEAR_DECADES == "1990-1998" & AGE > 25 ~ 1,
+    mutate(drop = case_when(BIRTHYEAR_DECADES == "1927-1936" & AGE < 55 ~ 1,
+                            BIRTHYEAR_DECADES == "1937-1946" & AGE < 45 ~ 1,
+                            BIRTHYEAR_DECADES == "1947-1956" & AGE < 35 ~ 1,
+                            BIRTHYEAR_DECADES == "1957-1966" ~ 0,
+                            BIRTHYEAR_DECADES == "1967-1976" & AGE > 47 ~ 1,
+                            BIRTHYEAR_DECADES == "1977-1986" & AGE > 37 ~ 1,
+                            BIRTHYEAR_DECADES == "1987-1996" & AGE > 27 ~ 1,
                             TRUE ~ 0)) %>%
-    filter(drop == 0, AGE <= 55, AGE >= start_age) %>%
+    filter(drop == 0) %>%
     pivot_wider(names_from = FEMALE, values_from = MEAN.OUTCOME) %>%
     mutate(ratio = Women/Men) %>%
     filter(BIRTHYEAR_DECADES %in% decades_to_include) %>%
@@ -139,7 +153,7 @@ prepare_counterfactual_data <- function(data,
                                        group_var = NULL,
                                        refcohort = 1957,
                                        start_age = 25,
-                                       scenarios_to_include = "main") {
+                                       scenarios_to_include = "appendix") {
   
   # If no group_var specified, create a dummy group with constant value
   if (is.null(group_var)) {
