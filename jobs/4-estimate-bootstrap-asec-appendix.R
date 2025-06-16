@@ -42,21 +42,14 @@ do_one <- function(i) {
   data_descplot <- gen_outcome_sumstats(
     bootstrap_sample, use_birth_group = "BIRTHYEAR_DECADES",
     outcome_var = "INCWAGE", weight_var = "ASECWT")
-  
-  
-  bs_q5 = gen_outcome_sumstats(
-    bootstrap_sample, use_birth_group = "BIRTHYEAR_DECADES",
-    outcome_var = "INCWAGE", weight_var = "ASECWT",
-    sumstat = "quantile", probs = 0.5)
+
   # Store results in named lists (using string names ensures proper indexing)
   list(
   plot1_asec = prepare_plot1_data(data_descplot),
   plot2_asec= prepare_plot2_data(data_descplot),
   data_restplot <- gen_outcome_sumstats(bootstrap_sample, 
                                         outcome_var = "INCWAGE",
-                                        weight_var = "ASECWT"),
-  plot1_asec_median = prepare_plot1_data(bs_q5),
-  plot2_asec_median = prepare_plot2_data(bs_q5)
+                                        weight_var = "ASECWT")
   )
 }
 

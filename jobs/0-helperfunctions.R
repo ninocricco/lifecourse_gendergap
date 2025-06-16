@@ -9,7 +9,7 @@ source("jobs/0-libraries.r")
 # DATA PREP FUNCTIONS
 #------------------------------------------------------------------------------
 
-# Custom inverse of the built in %in% operator, checks if element is NOT in a set
+# Custom inverse of the built in %in% operator, check if element is NOT in a set
 '%!in%' <- function(x,y)!('%in%'(x,y))
 
 # Assigns elements in that are %in% a set of NA codes to missing

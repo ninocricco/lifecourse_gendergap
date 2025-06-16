@@ -145,13 +145,15 @@ analytic_sample <- data_monthly %>%
 # Diagnostics figure to show what % of Rs report "hrs vary" by year & sex 
 fig_diag_hrsvary <- analytic_sample %>%
   group_by(FEMALE, YEAR) %>%
-  summarise(share_hrsvary = wtd.mean(UHRSWORK1_HRSVARY_FLAG, weight = EARNWT)) %>%
+  summarise(
+    share_hrsvary = wtd.mean(UHRSWORK1_HRSVARY_FLAG, weight = EARNWT)) %>%
   ggplot(aes(
     x = YEAR, y = share_hrsvary, linetype = FEMALE)) +
   geom_line() +
   theme_bw() +
-  labs(title = "Diagnostics Plot: Workers Reporting Hours Vary, CPS Outgoing Rotation Group",
-       y = "Share", x = "Year") +
+  labs(
+    title = "Diagnostics Plot: Workers Reporting Hours Vary, CPS Outgoing Rotation Group",
+    y = "Share", x = "Year") +
   theme(legend.position = "bottom", 
         plot.title = element_text(hjust = .5),
         legend.title = element_blank()) +
@@ -176,6 +178,31 @@ model_hrsvary <- hrsvary_estimation %>%
     model = map(
       data, ~ lm(UHRSWORK1 ~ AGE + RACEETH + MARRIED + FBORN + EDUC, data = .x))
   )
+
+# Diagnostic plots: selection model coefficients
+hrsvary_model_estimates <- model_hrsvary %>%
+  mutate(model_info = map(model, tidy)) %>%
+  # Unnest the model information
+  unnest(model_info) %>%
+  mutate(lower_ci = estimate - (std.error*1.96),
+         upper_ci = estimate + (std.error*1.96)) %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(x = WKSTAT_SUM, y = estimate, color = FEMALE)) +
+  geom_point(size = 2, position = position_dodge(width = .6)) +  
+  geom_errorbar(
+    aes(ymin = lower_ci, ymax = upper_ci),
+    width = 0.2,
+    position = position_dodge(width = .6)
+  ) +
+  create_common_theme(14, "bottom") +
+  facet_grid(cols = vars(term)) +
+  guides(color = guide_legend("")) +
+  labs(x = "Work Status", "Estimate", 
+       title = "Coefficients, Model Estimates for Hours Vary Imputation")
+
+ggsave("figures/draft_paper/diagnostic_plots_13.06.25/hoursvary_modelestimates.pdf",
+       hrsvary_model_estimates,
+       width = 10, height = 8, dpi = 500, units = "in")
 
 # Generate predicted hours among Rs who report hours vary using these models
 hrsvary_data <- analytic_sample %>%
@@ -291,8 +318,9 @@ fig_mean_earnings_topcode_adj <- analytic_sample_recoded_topcode %>%
   geom_point() +
   theme_bw() +
   facet_wrap(~FEMALE) + 
-  labs(title = "Diagnostics Plot: Mean Weekly Earnigns w/ Top-Code Adjustment, ORG",
-       y = "Weekly Earnigns", x = "Year") +
+  labs(
+    title = "Diagnostics Plot: Mean Weekly Earnigns w/ Top-Code Adjustment, ORG",
+    y = "Weekly Earnigns", x = "Year") +
   theme(legend.position = "bottom", 
         plot.title = element_text(hjust = .5),
         legend.title = element_blank()) +
@@ -344,18 +372,20 @@ analytic_sample_org <- analytic_sample_recoded_topcode %>%
                               UHRSWORK1 == 0 ~ "None", # 987 Observartions report being paid weekly but 0 hours worked
                               PAIDHOUR != 2 ~ "Weekly"), 
     # Calculating hourly wage when capping weekly hours at 40 hours
-    EARNHRLY2_TC_HRSCAP_EXCTIPS  = case_when(PAIDHOUR == 2 ~ HOURWAGE2, 
-                                              UHRSWORK1 == 0 ~ NA,
-                                              PAIDHOUR != 2 ~ EARNWEEK2_TC/UHRSWORK1_PRED_CAP),
+    EARNHRLY2_TC_HRSCAP_EXCTIPS  = case_when(
+      PAIDHOUR == 2 ~ HOURWAGE2, 
+      UHRSWORK1 == 0 ~ NA,
+      PAIDHOUR != 2 ~ EARNWEEK2_TC/UHRSWORK1_PRED_CAP),
     EARNHRLY2_TC_HRSCAP_INCTIPS = EARNWEEK2_TC/UHRSWORK1_PRED_CAP,
     # Creates birth cohort groupings for later figures
-    BIRTHYEAR_DECADES = case_when(BIRTHYEAR %in% c(1927:1936) ~ "1927-1936",
-                                       BIRTHYEAR %in% c(1937:1946) ~ "1937-1946",
-                                       BIRTHYEAR %in% c(1947:1956) ~ "1947-1956",
-                                       BIRTHYEAR %in% c(1957:1966) ~ "1957-1966",
-                                       BIRTHYEAR %in% c(1967:1976) ~ "1967-1976",
-                                       BIRTHYEAR %in% c(1977:1986) ~ "1977-1986",
-                                       BIRTHYEAR %in% c(1987:1996) ~ "1987-1996"
+    BIRTHYEAR_DECADES = case_when(
+      BIRTHYEAR %in% c(1927:1936) ~ "1927-1936",
+      BIRTHYEAR %in% c(1937:1946) ~ "1937-1946",
+      BIRTHYEAR %in% c(1947:1956) ~ "1947-1956",
+      BIRTHYEAR %in% c(1957:1966) ~ "1957-1966",
+      BIRTHYEAR %in% c(1967:1976) ~ "1967-1976",
+      BIRTHYEAR %in% c(1977:1986) ~ "1977-1986",
+      BIRTHYEAR %in% c(1987:1996) ~ "1987-1996"
          ))
 
 #------------------------------------------------------------------------------
@@ -376,7 +406,8 @@ means_cohorts_25 <- analytic_sample_org %>%
     .fns = ~ weighted.mean(., w = EARNWT, na.rm = TRUE)
   )) %>% 
   gather(KEY, VALUE, -c(BIRTHYEAR, FEMALE, YEAR)) %>%
-  mutate(KEY_2 = ifelse(KEY %in% c("EARNHRLY", "HOURWAGE"), "Hourly", "Weekly")) %>%
+  mutate(KEY_2 = ifelse(
+    KEY %in% c("EARNHRLY", "HOURWAGE"), "Hourly", "Weekly")) %>%
   ggplot(aes(x = YEAR, y = VALUE, linetype = FEMALE)) +
   facet_grid(rows = vars(KEY), scales = "free") +
   geom_line() +
@@ -430,8 +461,9 @@ reporting_wages_means  <- analytic_sample_org %>%
   theme_bw() +
   facet_wrap(~FEMALE) +
   theme(legend.position = "bottom", plot.title = element_text(hjust = .5)) +
-  labs(y = "Mean", x = "Year",
-       title = "Mean Wages Among Workers Reporting Hourly/Weekly Earnings, HOUR/WEEKLY WAGE") +
+  labs(
+    title = "Mean Wages Among Workers Reporting Hourly/Weekly Earnings, HOUR/WEEKLY WAGE",
+    y = "Mean", x = "Year") +
   geom_vline(xintercept = 1988, linetype = "dashed", color = "red") +
   geom_vline(xintercept = 1993, linetype = "dashed", color = "red") +
   guides(linetype = guide_legend("Earnings Reported"))
